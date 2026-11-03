@@ -16,6 +16,9 @@ from ..customtheme import TOKEN_KEYS
 
 # OKLCH values from the spec, converted to sRGB, plus a few popular editor palettes.
 THEMES = {
+    "ice": {"label": "Ice", "dark": True,
+            "window": "#090f17", "panel": "#111c28", "raised": "#1b2b3b",
+            "text": "#edf5fc", "muted": "#a0b4c8", "border": "#2b4053", "accent": "#89dcff"},
     "light": {"label": "Light", "dark": False,
               "window": "#f1f4f6", "panel": "#fcfdff", "raised": "#e2e7ec", "text": "#1f2329",
               "muted": "#646d76", "border": "#c2c8cf", "accent": "#0f88dd"},
@@ -66,6 +69,8 @@ class Theme(QObject):
             theme = self._resolve(self._mode)
         self._dark = theme["dark"]
         self._t = {**{k: theme[k] for k in TOKEN_KEYS}, **SHARED}
+        if self._mode == "ice":
+            self._t["onAccent"] = "#091723"
         self._update_palette()
         self.changed.emit()
 
@@ -135,7 +140,7 @@ class Theme(QObject):
     live = Property(QColor, lambda self: QColor(self._t["live"]), notify=changed)
     warning = Property(QColor, lambda self: QColor(self._t["warning"]), notify=changed)
     error = Property(QColor, lambda self: QColor(self._t["error"]), notify=changed)
-    radius = Property(int, lambda self: 6, constant=True)
+    radius = Property(int, lambda self: 10, constant=True)
 
     def tokens(self) -> dict:
         """The 7 color tokens of the active theme, as hex strings — used to build a theme template."""

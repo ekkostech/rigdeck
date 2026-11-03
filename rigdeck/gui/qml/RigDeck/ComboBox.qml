@@ -4,7 +4,7 @@ import QtQuick.Controls as T
 // RigDeck's ComboBox: Fusion's control with a rounded, theme-coloured frame.
 T.ComboBox {
     id: root
-    implicitHeight: 32
+    implicitHeight: 38
     hoverEnabled: true
     font.pixelSize: 13
     background: Rectangle {

@@ -5,7 +5,7 @@ import os
 import sys
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication, QIcon, QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
@@ -20,6 +20,7 @@ from .setupfile import SettingsFile
 from .icons import IconProvider
 from .system import SystemBackend
 from .theme import Theme
+from .studio import ScreenStudio
 
 QML_DIR = os.path.join(os.path.dirname(__file__), "qml")
 
@@ -65,6 +66,7 @@ def run(argv: list[str]) -> int:
 
     QQuickStyle.setStyle("Fusion")  # neutral base; colors come from the theme palette
     app = QGuiApplication(argv)
+    app.setFont(QFont("Adwaita Sans", 10))
     app.setApplicationName("rigdeck")
     app.setApplicationDisplayName("RigDeck")
     app.setApplicationVersion(__version__)
@@ -93,6 +95,9 @@ def run(argv: list[str]) -> int:
     ctx.setContextProperty("bluez", bluez)
     peripherals: list = []
     nav = _navigation(ctx, keep, peripherals)
+    studio = ScreenStudio()
+    keep.append(studio)
+    ctx.setContextProperty("screenStudio", studio)
     state = AppState(theme, nav, peripherals + [bluez])
     keep.append(state)
     ctx.setContextProperty("appState", state)

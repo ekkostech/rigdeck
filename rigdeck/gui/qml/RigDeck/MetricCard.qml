@@ -11,18 +11,18 @@ Card {
     property string unit: ""
     property string detail: ""
     property color valueColor: theme.text
-    implicitHeight: col.implicitHeight + 32
+    implicitHeight: col.implicitHeight + 40
     implicitWidth: 180
     Layout.fillHeight: true      // cards in one row share its height
 
     ColumnLayout {
         id: col
         anchors.fill: parent
-        anchors.margins: 16
+        anchors.margins: 20
         spacing: 6
         RowLayout {
             spacing: 8
-            Icon { name: root.icon; size: 15; color: theme.muted }
+            Icon { name: root.icon; size: 15; color: theme.accent }
             Label { text: root.label; color: theme.muted; font.pixelSize: 13 }
         }
         RowLayout {
@@ -30,7 +30,7 @@ Card {
             Label {
                 text: root.value
                 color: root.valueColor
-                font.pixelSize: 24
+                font.pixelSize: 32; font.family: "Adwaita Mono"
                 font.weight: Font.DemiBold
             }
             Label {

@@ -9,7 +9,7 @@ AbstractButton {
     property string label: ""
     property bool current: false
     property bool compact: false
-    implicitHeight: 40
+    implicitHeight: 44
     Layout.fillWidth: true
     focusPolicy: Qt.StrongFocus
     Accessible.name: label
@@ -20,24 +20,24 @@ AbstractButton {
 
     background: Rectangle {
         radius: theme.radius
-        color: root.current ? theme.accent
+        color: root.current ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.15)
              : root.hovered ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.12) : "transparent"
         border.width: root.visualFocus ? 2 : 0
         border.color: root.current ? theme.onAccent : theme.accent
     }
     contentItem: RowLayout {
         spacing: 12
-        Item { implicitWidth: root.compact ? (root.width - 18) / 2 - 12 : 0 }
-        Icon { name: root.iconName; size: 18; color: root.current ? theme.onAccent : theme.text }
+        Item { implicitWidth: 0 }
+        Icon { name: root.iconName; size: 18; color: root.current ? theme.accent : theme.text }
         Label {
             visible: !root.compact
             text: root.label
-            color: root.current ? theme.onAccent : theme.text
+            color: root.current ? theme.accent : theme.text
             font.pixelSize: 14
             elide: Text.ElideRight
             Layout.fillWidth: true
         }
     }
-    leftPadding: 12
+    leftPadding: root.compact ? (width - 18) / 2 : 12
     rightPadding: 12
 }

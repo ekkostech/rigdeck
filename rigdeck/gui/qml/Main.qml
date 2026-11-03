@@ -31,13 +31,14 @@ ApplicationWindow {
     property string currentId: "overview"
     readonly property var pages: [{ id: "overview", title: "Overview", icon: "layout-grid",
                                     page: Qt.resolvedUrl("pages/OverviewPage.qml") }]
+                                 .concat([{id: "studio", title: "Screen Studio", icon: "monitor", page: Qt.resolvedUrl("pages/StudioPage.qml")}])
                                  .concat(appState.nav)
                                  .concat([{ id: "settings", title: "Settings", icon: "settings",
                                             page: Qt.resolvedUrl("pages/SettingsPage.qml") }])
 
     // Sidebar sections, in this order; pages not listed go by kind (peripherals -> Devices)
     readonly property var sectionOrder: ["", "Monitoring", "Hardware", "Devices"]
-    readonly property var placement: ({ overview: ["", 0], resources: ["Monitoring", 0], gamemon: ["Monitoring", 1],
+    readonly property var placement: ({ overview: ["", 0], studio: ["", 1], resources: ["Monitoring", 0], gamemon: ["Monitoring", 1],
         cpu: ["Hardware", 0], gpu: ["Hardware", 1], memory: ["Hardware", 2], storage: ["Hardware", 3],
         motherboard: ["Hardware", 4], cooler: ["Hardware", 5], network: ["Hardware", 6], bluetooth: ["Hardware", 7],
         lighting: ["Devices", -1], keyboard: ["Devices", 0], mouse: ["Devices", 1], headset: ["Devices", 2], monitor: ["Devices", 3],
@@ -74,7 +75,7 @@ ApplicationWindow {
         // ---- top bar
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 48
+            implicitHeight: 64
             color: theme.panel
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: theme.border }
             RowLayout {
@@ -89,8 +90,8 @@ ApplicationWindow {
                     color: theme.accent
                     Icon { anchors.centerIn: parent; name: "gauge"; size: 16; color: theme.onAccent }
                 }
-                Label { text: "RigDeck"; color: theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
-                Label { text: "Hardware Control Center"; color: theme.muted; font.pixelSize: 12; visible: !root.compact }
+                Label { text: "RIGDECK"; color: theme.text; font.letterSpacing: 2; font.pixelSize: 16; font.weight: Font.DemiBold }
+                Label { text: "YOUR HARDWARE. YOUR SIGNATURE."; color: theme.muted; font.pixelSize: 10; font.letterSpacing: 1; visible: !root.compact }
                 Item { Layout.fillWidth: true }
                 // a new version: shown next to the theme switch until it's installed; opens Settings → Updates
                 Button {
@@ -140,7 +141,7 @@ ApplicationWindow {
             // ---- sidebar
             Rectangle {
                 Layout.fillHeight: true
-                implicitWidth: root.compact ? 64 : 216
+                implicitWidth: root.compact ? 64 : 224
                 color: theme.panel
                 Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: theme.border }
                 ColumnLayout {

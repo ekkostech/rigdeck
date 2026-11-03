@@ -5,7 +5,7 @@ import QtQuick.Controls as T
 // `highlighted: true` = the main action of a group (Apply, Save, Start…).
 T.Button {
     id: root
-    implicitHeight: 32
+    implicitHeight: 38
     implicitWidth: Math.max(72, contentItem.implicitWidth + 28)
     hoverEnabled: true
     font.pixelSize: 13
@@ -25,7 +25,7 @@ T.Button {
         Text {
             text: root.text
             font: root.font
-            color: root.highlighted ? "white" : theme.text
+            color: root.highlighted ? theme.onAccent : theme.text
             anchors.verticalCenter: parent.verticalCenter
         }
       }
