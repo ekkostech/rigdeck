@@ -21,6 +21,7 @@ from .icons import IconProvider
 from .system import SystemBackend
 from .theme import Theme
 from .studio import ScreenStudio
+from .studiopreview import StudioPreview
 
 QML_DIR = os.path.join(os.path.dirname(__file__), "qml")
 
@@ -98,6 +99,7 @@ def run(argv: list[str]) -> int:
     studio = ScreenStudio()
     keep.append(studio)
     ctx.setContextProperty("screenStudio", studio)
+    engine.addImageProvider("studio", StudioPreview(studio))
     state = AppState(theme, nav, peripherals + [bluez])
     keep.append(state)
     ctx.setContextProperty("appState", state)

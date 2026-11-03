@@ -10,6 +10,10 @@ PageScroll {
     readonly property var d: screenStudio.draft
     readonly property var cool: typeof cooler !== "undefined" ? cooler : null
     readonly property bool uploading: cool !== null && cool.busy !== ""
+    property int liveTick: 0
+    readonly property bool portfolioMode: page.d.preset === "Projects" || page.d.preset === "Live projects"
+    readonly property bool liveMode: page.d.preset === "Live projects"
+    Timer { interval: appState.reduceMotion ? 1000 : 200; running: page.shown && page.liveMode; repeat: true; onTriggered: page.liveTick++ }
     PageHeader {
         title: "Screen Studio"
         subtitle: "A little screen. Entirely yours."
@@ -30,10 +34,10 @@ PageScroll {
                 Rectangle {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 12, 350); height: width; radius: width / 2
-                    color: screenStudio.preview ? theme.panel : "#070c12"; border.color: theme.border; border.width: screenStudio.preview ? 0 : 6
+                    color: (screenStudio.preview || page.liveMode) ? theme.panel : "#070c12"; border.color: theme.border; border.width: (screenStudio.preview || page.liveMode) ? 0 : 6
                     Rectangle {
                         anchors.fill: parent; anchors.margins: 12
-                        radius: width / 2; color: "transparent"; border.color: theme.accent; opacity: 0.35; visible: !screenStudio.preview
+                        radius: width / 2; color: "transparent"; border.color: theme.accent; opacity: 0.35; visible: !screenStudio.preview && !page.liveMode
                     }
                     Item {
                         anchors.fill: parent; anchors.margins: 18
@@ -41,9 +45,10 @@ PageScroll {
                             id: animation
                             anchors.fill: parent; source: screenStudio.preview
                             playing: page.shown && !appState.reduceMotion && !screenStudio.busy
-                            visible: !appState.reduceMotion; cache: false
+                            visible: !appState.reduceMotion && !page.liveMode; cache: false
                         }
-                        Image { id: poster; anchors.fill: parent; source: screenStudio.poster; visible: appState.reduceMotion }
+                        Image { id: poster; anchors.fill: parent; source: screenStudio.poster; visible: appState.reduceMotion && !page.liveMode }
+                        Image { anchors.fill: parent; source: page.liveMode ? "image://studio/"+(appState.reduceMotion ? "still/" : "live/")+page.liveTick : ""; visible: page.liveMode; cache: false }
                         Canvas {
                             anchors.fill: parent
                             Connections { target: theme; function onChanged() { parent.requestPaint() } }
@@ -58,7 +63,7 @@ PageScroll {
                             }
                         }
                         Column {
-                            anchors.centerIn: parent; spacing: 12; visible: screenStudio.preview === ""
+                            anchors.centerIn: parent; spacing: 12; visible: screenStudio.preview === "" && !page.liveMode
                             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "YOUR NEXT\nSIGNATURE"; horizontalAlignment: Text.AlignHCenter; color: "#edf5fc"; font.pixelSize: 25; font.bold: true }
                             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Create a preview to begin"; color: "#a0b4c8"; font.pixelSize: 12 }
                         }
@@ -67,18 +72,18 @@ PageScroll {
             }
             Label {
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
-                text: screenStudio.busy ? "Rendering your design…" : screenStudio.ready ? "Preview ready · review before sending" : screenStudio.preview ? "Design changed · rebuild the preview" : "Your current cooler screen stays unchanged"
+                text: page.liveMode ? screenStudio.liveStatus : screenStudio.busy ? "Rendering your design…" : screenStudio.ready ? "Preview ready · review before sending" : screenStudio.preview ? "Design changed · rebuild the preview" : "Your current cooler screen stays unchanged"
                 color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap
             }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                Button { objectName: "renderButton"; text: screenStudio.busy ? "Rendering…" : "Build preview"; highlighted: true; enabled: !screenStudio.busy && !page.uploading; onClicked: screenStudio.render() }
+                Button { objectName: "renderButton"; text: screenStudio.busy ? "Rendering…" : "Build preview"; highlighted: true; enabled: !screenStudio.busy && !page.uploading && !page.liveMode; onClicked: screenStudio.render() }
                 Button {
                     text: "Send to cooler"
-                    enabled: screenStudio.ready && !screenStudio.busy && page.cool && page.cool.connected && !page.uploading
-                    onClicked: page.cool.upload(screenStudio.output)
+                    enabled: !page.liveMode && screenStudio.ready && !screenStudio.busy && page.cool && page.cool.connected && !page.uploading
+                    onClicked: page.cool.uploadStudio(screenStudio.output)
                     ToolTip.visible: hovered
-                    ToolTip.text: "Upload this clip and add it to the cooler carousel"
+                    ToolTip.text: "Play only this design; keep older files stored"
                 }
             }
             Label { Layout.fillWidth: true; visible: page.uploading; text: page.cool ? page.cool.busy : ""; color: theme.accent; wrapMode: Text.WordWrap }
@@ -92,7 +97,7 @@ PageScroll {
                 enabled: !screenStudio.busy && !page.uploading
                 Label { text: "Design"; color: theme.muted }
                 ComboBox {
-                    objectName: "presetPicker"; Layout.fillWidth: true; model: ["Signature", "Traffic"]
+                    objectName: "presetPicker"; Layout.fillWidth: true; model: ["Signature", "Traffic", "Projects", "Live projects"]
                     currentIndex: model.indexOf(page.d.preset)
                     Accessible.name: "Design preset"
                     onActivated: screenStudio.edit("preset", currentText)
@@ -121,6 +126,7 @@ PageScroll {
                     SpinBox { from: 60; to: 240; value: page.d.y; Accessible.name: "Vertical text position"; onValueModified: screenStudio.edit("y", value) }
                 }
                 RowLayout {
+                    visible: !page.portfolioMode
                     Layout.fillWidth: true
                     Button { text: "Accent colour"; onClicked: { colors.selectedColor = page.d.color; colors.open() } }
                     Rectangle { width: 26; height: 26; radius: 13; color: page.d.color; border.color: theme.border }
@@ -133,27 +139,31 @@ PageScroll {
                     Label { text: "sec"; color: theme.muted }
                 }
                 RowLayout {
+                    visible: !page.portfolioMode
                     Button { text: "Choose logo"; onClicked: logoFile.open() }
                     Button { text: "Clear logo"; enabled: page.d.logo !== ""; onClicked: screenStudio.edit("logo", "") }
                 }
-                Label { Layout.fillWidth: true; text: page.d.logo ? page.d.logo.split("/").pop() : "PNG, WebP, JPEG or SVG"; color: theme.muted; font.pixelSize: 12; elide: Text.ElideMiddle }
+                Label { visible: !page.portfolioMode; Layout.fillWidth: true; text: page.d.logo ? page.d.logo.split("/").pop() : "PNG, WebP, JPEG or SVG"; color: theme.muted; font.pixelSize: 12; elide: Text.ElideMiddle }
                 RowLayout {
+                    visible: !page.portfolioMode
                     Button { text: "Photo / video"; onClicked: mediaFile.open() }
                     Button { text: "Clear media"; enabled: page.d.media !== ""; onClicked: screenStudio.edit("media", "") }
                 }
-                Label { Layout.fillWidth: true; text: page.d.media ? page.d.media.split("/").pop() : "Centre-cropped to fit the circular screen"; color: theme.muted; font.pixelSize: 12; elide: Text.ElideMiddle }
+                Label { visible: !page.portfolioMode; Layout.fillWidth: true; text: page.d.media ? page.d.media.split("/").pop() : "Centre-cropped to fit the circular screen"; color: theme.muted; font.pixelSize: 12; elide: Text.ElideMiddle }
             }
             Panel {
-                Layout.fillWidth: true; visible: page.d.preset === "Traffic"
-                title: "MacDigital · search pulse"
+                Layout.fillWidth: true; visible: page.d.preset !== "Signature"
+                title: page.d.preset === "Traffic" ? "MacDigital · search pulse" : "Your project rotation"
                 subtitle: "Real numbers. A cinematic presentation."
-                Label { Layout.fillWidth: true; text: screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
-                Label { Layout.fillWidth: true; text: "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
-                Button { text: "Import analytics snapshot"; enabled: !screenStudio.busy; onClicked: statsFile.open() }
+                Label { Layout.fillWidth: true; text: page.liveMode ? screenStudio.liveStatus : page.d.preset === "Projects" ? screenStudio.projects.map(p => p.name).join(" · ") : screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
+                Label { Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute. Requests include bots and assets, not unique visitors. The physical LCD live overlay is still under verification." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Button { visible: !page.portfolioMode; text: "Import analytics snapshot"; enabled: !screenStudio.busy; onClicked: statsFile.open() }
+                Button { visible: page.liveMode; text: "Refresh Cloudflare now"; onClicked: screenStudio.refreshLive() }
+                Label { visible: page.portfolioMode; Layout.fillWidth: true; text: screenStudio.projects.map(p => p.name).join(" · "); color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
             }
         }
     }
-    Component.onCompleted: { if (!screenStudio.preview && !screenStudio.busy) screenStudio.render() }
+    Component.onCompleted: { if (!page.liveMode && !screenStudio.preview && !screenStudio.busy) screenStudio.render() }
     ColorDialog { id: colors; title: "Accent colour"; onAccepted: screenStudio.edit("color", selectedColor.toString()) }
     ColorDialog { id: backgroundColor; title: "Background colour"; onAccepted: screenStudio.edit("background", selectedColor.toString()) }
     FileDialog { id: logoFile; title: "Choose your logo"; nameFilters: ["Images (*.svg *.png *.webp *.jpg *.jpeg)"]; onAccepted: screenStudio.chooseFile("logo", selectedFile.toString()) }

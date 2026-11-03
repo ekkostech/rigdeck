@@ -344,7 +344,11 @@ class CoolerBackend(QObject):
                   done, failed)
 
     @Slot(str)
-    def upload(self, url):
+    def uploadStudio(self, url):
+        self.upload(url, exclusive=True)
+
+    @Slot(str)
+    def upload(self, url, exclusive=False):
         if self._busy:
             return
         path = QUrl(url).toLocalFile() or url
@@ -365,7 +369,12 @@ class CoolerBackend(QObject):
             if len(data) > c.storage_free_kb() * 1024:
                 raise media.MediaError("not enough space on the cooler")
             c.upload_media(data, name, progress)
-            return add_to_carousel(c, name), c.storage_free_kb()
+            screen = add_to_carousel(c, name)
+            if exclusive:
+                screen.write(c, screen.files, [name])
+                c.send(b"\xc0\x00\x00\x00")  # hide legacy GCC text/logo/info overlays
+                c.save()
+            return screen, c.storage_free_kb()
 
         def done(r):
             self._set_busy("")

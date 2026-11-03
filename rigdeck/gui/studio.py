@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 
-from PySide6.QtCore import Property, QObject, QRectF, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QRectF, Qt, QUrl, Signal, Slot, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPen, QRadialGradient
 from PySide6.QtSvg import QSvgRenderer
 from .bridge import run_async
@@ -33,7 +33,7 @@ def validate(values):
         d[key] = int(d[key])
         if not low <= d[key] <= high:
             raise ValueError(f'{key} must be between {low} and {high}.')
-    if d['effect'] not in ('Orbit', 'Pulse', 'Still') or d['preset'] not in ('Signature', 'Traffic'):
+    if d['effect'] not in ('Orbit', 'Pulse', 'Still') or d['preset'] not in ('Signature', 'Traffic', 'Projects', 'Live projects'):
         raise ValueError('Unknown design preset or animation.')
     for key in ('media', 'logo'):
         if d[key] and not Path(d[key]).is_file():
@@ -80,6 +80,8 @@ def compose(d, t=0, background=None, stats=None):
         p.save()
         p.translate(160, 90 + math.sin(phase)*3)
         p.scale(1 + math.sin(phase)*0.025, 1)
+        if d.get('logoPlate'):
+            p.setPen(Qt.NoPen); p.setBrush(QColor('#eff7fc')); p.drawRoundedRect(QRectF(-82,-34,164,68),8,8)
         if d['logo'].lower().endswith('.svg'):
             logo = QSvgRenderer(d['logo'])
             if not logo.isValid():
@@ -92,14 +94,25 @@ def compose(d, t=0, background=None, stats=None):
             logo = QImage(d['logo'])
             if logo.isNull():
                 p.end(); raise ValueError('Choose a readable PNG, WebP, JPEG or SVG logo.')
-            logo = logo.scaled(90, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo = logo.scaled(150, 65, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             p.drawImage(-logo.width()/2, -logo.height()/2, logo)
         p.restore()
     else:
         line(p, 'SCREEN STUDIO', 72, 12, '#a0b4c8')
     if d['preset'] == 'Traffic':
-        line(p, 'MACDIGITAL.CA', 124, 16, '#edf5fc', bold=True)
-        if stats:
+        line(p, stats.get('displayName', stats.get('siteUrl', 'MACDIGITAL.CA').removeprefix('sc-domain:')).upper() if stats else 'MACDIGITAL.CA', 124, 16, '#edf5fc', bold=True)
+        if stats and stats.get('liveMetrics'):
+            live=stats['liveMetrics']; index=int(t / (d['duration']/3)) % 3
+            metrics=[('REQUESTS · LAST 15 MIN', str(live.get('requests', '—'))),
+                     ('CACHE HIT RATE', ('%.1f%%' % live['cachePct']) if live.get('cachePct') is not None else '—'),
+                     ('SERVER ERRORS · 15 MIN', str(live.get('serverErrors','—')))]
+            label,value=metrics[index]
+            if live.get('error'): label,value='DATA UNAVAILABLE','—'
+            line(p,value,151,38,d['color'],bold=True)
+            line(p,label,196,10,'#edf5fc')
+            line(p,'%.1f KB transferred' % (live.get('bytes',0)/1024) if not live.get('error') else 'Check connection in Rigdeck',220,11,'#a0b4c8')
+            line(p,stats.get('freshness','Fetching…'),250,10,'#a0b4c8')
+        elif stats:
             current = stats['current']; index = int(t / (d['duration']/3)) % 3
             metrics = [('SEARCH CLICKS', f"{current['clicks']:,}"),
                        ('IMPRESSIONS', f"{current['impressions']:,}"),
@@ -163,6 +176,16 @@ class ScreenStudio(QObject):
         self._temp = tempfile.TemporaryDirectory(prefix='rigdeck-studio-')
         try: self._draft = validate(json.loads((ROOT/'studio-draft.json').read_text()))
         except (OSError, ValueError, TypeError): pass
+        self._projects=[]; self._live_data={}; self._live_error=''; self._refreshing=False
+        try:
+            projects=json.loads((ROOT/'projects.json').read_text())
+            if not isinstance(projects,list) or len(projects)>20: raise ValueError('Invalid projects')
+            if any(not isinstance(p,dict) or not isinstance(p.get('site'),str) for p in projects): raise ValueError('Invalid project')
+            self._projects=projects
+        except (OSError,ValueError): pass
+        self._live_timer=QTimer(self, interval=60000, timeout=self.refreshLive)
+        self._live_timer.start()
+        QTimer.singleShot(100,self.refreshLive)
         self._stats = None
         try:
             self._stats = self.read_stats(ROOT/'traffic-snapshot.json')
@@ -172,7 +195,7 @@ class ScreenStudio(QObject):
         if Path(path).stat().st_size > 1_000_000: raise ValueError('Snapshot must be smaller than 1 MB.')
         s = json.loads(Path(path).read_text())
         if not isinstance(s, dict): raise ValueError('Snapshot must be a JSON object.')
-        if s.get('siteUrl') != 'sc-domain:macdigital.ca': raise ValueError('Choose a macdigital.ca Search Console snapshot.')
+        if not isinstance(s.get('siteUrl'),str) or not s['siteUrl'].startswith(('sc-domain:', 'https://')): raise ValueError('Choose a Search Console snapshot with a site URL.')
         for k in ('clicks','impressions','ctr'):
             if not isinstance(s['current'][k], (int,float)) or not math.isfinite(s['current'][k]) or s['current'][k] < 0:
                 raise ValueError('Snapshot contains invalid metrics.')
@@ -184,6 +207,30 @@ class ScreenStudio(QObject):
             if not isinstance(r['impressions'], (int,float)) or not math.isfinite(r['impressions']) or r['impressions'] < 0:
                 raise ValueError('Invalid daily impressions.')
         return s
+    projects = Property('QVariantList', lambda s:s._projects, constant=True)
+    liveStatus = Property(str, lambda s:'Refreshing Cloudflare…' if s._refreshing else s._live_error or ('Cloudflare · rolling 15 minutes · refreshes every minute · includes bots' if s._live_data else 'Connecting to Cloudflare…'), notify=changed)
+    @Slot()
+    def refreshLive(self):
+        if self._refreshing or not self._projects: return
+        from .cloudflare import fetch
+        self._refreshing=True; self.changed.emit()
+        def done(data):
+            self._live_data=data; self._live_error=''; self._refreshing=False; self.changed.emit()
+        def failed(e):
+            self._live_error=str(e); self._refreshing=False; self.changed.emit()
+        run_async(lambda:fetch([p['site'] for p in self._projects]),done,failed)
+    def live_frame(self, elapsed, still=False):
+        if not self._projects: return compose({**DEFAULT,'text':'NO PROJECTS'})
+        from datetime import datetime, timezone
+        index=int(elapsed/self._draft['duration'])%len(self._projects); project=self._projects[index]
+        record=next((r for r in self._live_data.get('sites',[]) if r['site']==project['site']),{'error':'Waiting for data'})
+        stamp=self._live_data.get('fetchedAt')
+        age=int((datetime.now(timezone.utc)-datetime.fromisoformat(stamp)).total_seconds()) if stamp else None
+        freshness=('STALE · ' if age is not None and age>180 else 'UPDATED · ')+str(age)+'s AGO' if age is not None else 'WAITING FOR DATA'
+        d={**self._draft,'preset':'Traffic','logo':project.get('logo',''),'color':project.get('color','#89dcff'),'logoPlate':project.get('logoPlate',False)}
+        stats={'siteUrl':'sc-domain:'+project['site'],'displayName':project.get('name',project['site']),'liveMetrics':record,'freshness':freshness}
+        if still: d['effect']='Still'
+        return compose(d,elapsed%self._draft['duration'],stats=stats)
     draft = Property('QVariantMap', lambda s:s._draft, notify=changed)
     busy = Property(bool, lambda s:s._busy, notify=changed)
     error = Property(str, lambda s:s._error, notify=changed)
@@ -222,6 +269,8 @@ class ScreenStudio(QObject):
         except (ValueError, TypeError) as e:
             self._error=str(e); self.changed.emit(); return
         self._busy=True; self._error=''; self._output=''; self.changed.emit()
+        if d['preset']=='Live projects':
+            self._busy=False; self._error='Live preview refreshes automatically. Hardware live output is being verified; video upload is disabled in this mode.'; self.changed.emit(); return
         folder=Path(self._temp.name)/uuid.uuid4().hex
         def done(path):
             self._output=path; self._preview=QUrl.fromLocalFile(str(folder/'preview.gif')).toString()
@@ -229,4 +278,23 @@ class ScreenStudio(QObject):
             self._busy=False; self.changed.emit()
         def failed(e):
             self._busy=False; self._error=str(e); self.changed.emit()
-        run_async(lambda:render(d,folder,self._stats),done,failed)
+        run_async(lambda:render_projects(d,folder,self._projects) if d["preset"]=="Projects" else render(d,folder,self._stats),done,failed)
+
+
+def render_projects(values, folder, projects):
+    """Build one continuous portfolio clip, preserving each site's own data and logo."""
+    if not projects: raise ValueError('No projects configured.')
+    if len(projects)>20: raise ValueError('Use at most 20 projects.')
+    folder=Path(folder); folder.mkdir(parents=True,exist_ok=True)
+    clips=[]
+    for i,project in enumerate(projects):
+        d={**values,'preset':'Traffic','logo':project.get('logo',''),'color':project.get('color',values['color']),'logoPlate':project.get('logoPlate',False)}
+        stats={**project['snapshot'],'displayName':project.get('name',project['site'])}
+        clips.append(render(d,folder/str(i),stats))
+    listing=folder/'concat.txt'
+    listing.write_text(''.join("file '"+str(Path(c).resolve()).replace("'", "'\\''")+"'\n" for c in clips))
+    output=folder/('projects-'+uuid.uuid4().hex[:8]+'.mkv')
+    command(['-f','concat','-safe','0','-i',str(listing),'-c','copy',str(output)])
+    command(['-i',str(output),'-vf','fps=10,split[a][b];[a]palettegen[p];[b][p]paletteuse',str(folder/'preview.gif')])
+    (folder/'poster.png').write_bytes((folder/'0'/'poster.png').read_bytes())
+    return str(output)

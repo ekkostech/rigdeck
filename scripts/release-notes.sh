@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 v=${1:?usage: $0 X.Y.Z}
 notes=$(awk -v v="$v" '
-    $0 ~ "^## \\[?" v "\\]?( |$)" {f=1; next}
+    /^## / { heading=$2; gsub(/^\[|\]$/, "", heading); f=(heading==v); next }
     /^## /{f=0}
     f' CHANGELOG.md)
 # trim blank lines at the start and end

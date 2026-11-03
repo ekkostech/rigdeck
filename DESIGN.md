@@ -67,7 +67,7 @@ Cards and shared controls use a 10px radius. Controls are 38px tall, sidebar tar
 
 Shared QML primitives in `rigdeck/gui/qml/RigDeck` own buttons, fields, panels, navigation and metrics. Focus uses visible accent borders; hover is tonal; disabled controls are dimmed and non-interactive. Busy rendering preserves button geometry, disables edits and reports status. Native Qt file and colour dialogs provide keyboard operation. Error banners persist until editing or retry. Toasts report device actions through the existing app state.
 
-Reduced motion freezes the preview on its poster. Studio starts offline and remains useful without a cooler. An edited design invalidates the send action until a new preview is built. Uploaded clips reuse the existing hardware backend and its connection/progress/error handling.
+Reduced motion freezes rendered previews on their poster and stops decorative motion in live previews. Signature and Traffic start offline and remain useful without a cooler. An edited design invalidates the send action until a new preview is built. Uploaded clips reuse the existing hardware backend and its connection/progress/error handling.
 
 ## Do's and Don'ts
 
@@ -77,3 +77,13 @@ Reduced motion freezes the preview on its poster. Studio starts offline and rema
 - Do not call search clicks visitors or imported snapshots live traffic.
 - Do not upload on every edit or use repeated flash writes as a streaming protocol.
 - Do not add animations to normal control-panel surfaces.
+
+
+## Project display variants
+
+Each locally configured project supplies its real logo and accent colour within
+the shared circular bezel. A light logo plate is permitted for dark artwork
+such as Mary Cleaning's mark. Wide logos preserve their aspect ratio. Project
+controls hide single-logo and accent choices that would be overridden by the
+rotation. Live metrics show the source window and fetch age; decorative motion
+never implies fresh events.

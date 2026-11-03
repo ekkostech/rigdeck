@@ -7,6 +7,12 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.2 — 2026-11-03
+
+- Rotate configured project logos and search snapshots in Screen Studio.
+- Preview recent Cloudflare requests, bandwidth, cache rate and errors across connected projects; physical live LCD output remains under verification.
+- Studio uploads play the new design exclusively and clear legacy Gigabyte text overlays while retaining older media files.
+
 ## 0.8.3 — 2026-10-09
 
 - Settings can now import a custom theme from a JSON file, and export a template to start one from the current theme's colors
