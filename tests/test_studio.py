@@ -70,7 +70,7 @@ def test_live_unknown_metrics_are_not_displayed_as_zero(tmp_path, monkeypatch):
     monkeypatch.setattr(studio,'ROOT',tmp_path)
     backend=studio.ScreenStudio(); backend._projects=[{'site':'one.example','name':'One'}]
     unavailable=backend.live_frame(0)
-    backend._live_data={'sites':[{'site':'one.example','requests':0,'bytes':0,'cachePct':None,'serverErrors':0}]}
+    backend._live_data={'start':'2026-11-03T12:00:00Z','end':'2026-11-03T12:15:00Z','sites':[{'site':'one.example','requests':0,'bytes':0,'cachePct':None,'serverErrors':0}]}
     real_zero=backend.live_frame(0)
     assert unavailable != real_zero
 
@@ -90,3 +90,31 @@ def test_studio_upload_selects_only_new_clip_and_clears_legacy_text(monkeypatch)
     assert (['old.mkv','new.mkv'],['new.mkv']) in calls
     assert b'\xc0\x00\x00\x00' in calls
     assert calls[-1]=='save'
+
+
+def test_minute_history_preserves_partial_edges_and_real_zeros():
+    from rigdeck.gui.livecanvas import minute_history
+    report={'start':'2026-11-03T12:00:30Z','end':'2026-11-03T12:15:30Z'}
+    record={'series':[{'at':'2026-11-03T12:00:00Z','value':2},{'at':'2026-11-03T12:15:00Z','value':4}]}
+    history=minute_history(report,record)
+    assert len(history)==16
+    assert history[0][1]==2 and history[-1][1]==4
+    assert sum(v for _,v in history)==6
+    assert all(v==0 for _,v in history[1:-1])
+    assert minute_history(report,{'error':'Disconnected'})==[]
+    assert len(minute_history({**report,'end':'2026-11-03T12:15:00Z'},{}))==15
+
+
+def test_live_history_only_animates_when_measured_data_allows():
+    from rigdeck.gui.livecanvas import draw
+    project={'site':'example.com','name':'Example'}
+    record={'requests':4,'bytes':1024,'cachePct':50,'serverErrors':0,'series':[{'at':'2026-11-03T12:05:00Z','value':4}]}
+    report={'start':'2026-11-03T12:00:00Z','end':'2026-11-03T12:15:00Z','sites':[record]}
+    def frame(t, data=record, freshness='UPDATED · 5s AGO', still=False):
+        return draw(project,report,data,t,6,freshness,still)
+    assert frame(0)!=frame(3)
+    assert frame(0,still=True)==frame(3,still=True)
+    assert frame(0,freshness='STALE · 200s AGO')==frame(3,freshness='STALE · 200s AGO')
+    zero={**record,'requests':0,'series':[]}
+    assert frame(0,zero)==frame(3,zero)
+    assert frame(0,{'error':'Disconnected'})==frame(3,{'error':'Disconnected'})

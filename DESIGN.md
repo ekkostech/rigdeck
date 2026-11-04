@@ -89,3 +89,30 @@ rotation. Live metrics show the source window and fetch age; decorative motion
 never implies fresh events.
 
 Logos stay fixed in position and scale; no breathing or bobbing. Motion belongs to the surrounding bezel.
+
+
+## Cloudflare traffic replay — design direction
+
+Subject: six monitored websites on a circular 320px instrument; the job is to
+show the shape of recent request traffic and the cache share at a glance.
+
+Tokens: graphite #09121b, track #263b4b, frost #d4f3ff, muted #8da9b9,
+cache mint #79dcc5, error coral #ff806f. Site accents retain their brand meaning.
+Nimbus Sans Narrow carries the stable request total; Adwaita Sans labels the
+site; Adwaita Mono gives times and measured units consistent spacing.
+
+Layout: minute bars wrap 270 degrees around a fixed logo and a stable metric
+stack; an inner mint arc shows cache percentage. The lower opening is a replay
+caption and fetch age. A highlighted minute follows recorded time, not wall time.
+
+    [ measured minute bars / shared linear scale ]
+    [ cache-share arc / fixed brand mark         ]
+    [ total requests / cache / 5xx / bandwidth   ]
+    [ replay minute + its requests / fetch age  ]
+
+Critique: discarded the decorative spinning arcs and three-number carousel.
+A simulated particle stream would imply request-level timing we do not have;
+minute history uses the actual granularity available. A shared scale makes
+quiet and busy sites distinguishable. Zero-minute ticks are baseline markers,
+not positive bars. Empty, stale and unavailable data do not animate activity.
+Reduced motion stops the replay marker while keeping measured content visible.

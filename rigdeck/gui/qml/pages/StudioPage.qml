@@ -134,9 +134,10 @@ PageScroll {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    ComboBox { Layout.fillWidth: true; model: ["Orbit", "Pulse", "Still"]; currentIndex: model.indexOf(page.d.effect); Accessible.name: "Animation effect"; onActivated: screenStudio.edit("effect", currentText) }
-                    SpinBox { from: 3; to: 12; value: page.d.duration; Accessible.name: "Clip duration in seconds"; onValueModified: screenStudio.edit("duration", value) }
-                    Label { text: "sec"; color: theme.muted }
+                    ComboBox { visible: !page.liveMode; Layout.fillWidth: true; model: ["Orbit", "Pulse", "Still"]; currentIndex: model.indexOf(page.d.effect); Accessible.name: "Animation effect"; onActivated: screenStudio.edit("effect", currentText) }
+                    CheckBox { visible: page.liveMode; Layout.fillWidth: true; text: "Replay minute history"; checked: page.d.effect !== "Still"; onToggled: screenStudio.edit("effect", checked ? "Orbit" : "Still") }
+                    SpinBox { from: 3; to: 12; value: page.d.duration; Accessible.name: page.liveMode ? "Seconds per site" : "Clip duration in seconds"; onValueModified: screenStudio.edit("duration", value) }
+                    Label { text: page.liveMode ? "sec / site" : "sec"; color: theme.muted }
                 }
                 RowLayout {
                     visible: !page.portfolioMode
@@ -154,9 +155,10 @@ PageScroll {
             Panel {
                 Layout.fillWidth: true; visible: page.d.preset !== "Signature"
                 title: page.d.preset === "Traffic" ? "MacDigital · search pulse" : "Your project rotation"
-                subtitle: "Real numbers. A cinematic presentation."
+                subtitle: page.liveMode ? "See when traffic arrived and how it was served." : "Real numbers. A cinematic presentation."
                 Label { Layout.fillWidth: true; text: page.liveMode ? screenStudio.liveStatus : page.d.preset === "Projects" ? screenStudio.projects.map(p => p.name).join(" · ") : screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
                 Label { Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute. Requests include bots and assets, not unique visitors. The physical LCD live overlay is still under verification." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { visible: page.liveMode; Layout.fillWidth: true; text: "Outer bars: requests per minute, on one shared scale across sites. The moving marker replays recorded minutes. Mint ring: cache hit percentage. 5xx: server errors. Empty minutes stay empty; stale data pauses the replay."; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 12 }
                 Button { visible: !page.portfolioMode; text: "Import analytics snapshot"; enabled: !screenStudio.busy; onClicked: statsFile.open() }
                 Button { visible: page.liveMode; text: "Refresh Cloudflare now"; onClicked: screenStudio.refreshLive() }
                 Label { visible: page.portfolioMode; Layout.fillWidth: true; text: screenStudio.projects.map(p => p.name).join(" · "); color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }

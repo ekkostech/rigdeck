@@ -70,3 +70,11 @@ a permanently stale video, nor repeatedly rewrite the cooler flash. The known
 native CPU-name field can be updated with command E1, but on-screen behavior
 needs physical verification. The owner was asked to observe a bounded native
 mode-2 test; original display settings were restored afterward.
+
+The live canvas now uses minute bars on a shared linear scale across the fetched
+portfolio. The first and last buckets can be partial minutes because the source
+window is exactly 15 minutes. A sweep explicitly labelled REPLAY follows those
+buckets and displays their local-clock minute and request count. It is not a
+per-request event stream. The inner arc maps cache share to 0–100%; totals,
+5xx errors and bandwidth remain visible. Zero windows, missing data, stale
+data and reduced motion stop the sweep. Logos never move or change scale.

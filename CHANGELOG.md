@@ -7,6 +7,11 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.4 — 2026-11-03
+
+- Turn live project previews into measured minute-history replays with a shared traffic scale and cache-share arc.
+- Keep totals, bandwidth and errors visible together; stop replay for empty, unavailable or stale data and reduced motion.
+
 ## 0.8.3+ice.3 — 2026-11-03
 
 - Keep logos fixed in position and scale while the surrounding display animation continues.

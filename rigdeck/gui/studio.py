@@ -226,10 +226,10 @@ class ScreenStudio(QObject):
         stamp=self._live_data.get('fetchedAt')
         age=int((datetime.now(timezone.utc)-datetime.fromisoformat(stamp)).total_seconds()) if stamp else None
         freshness=('STALE · ' if age is not None and age>180 else 'UPDATED · ')+str(age)+'s AGO' if age is not None else 'WAITING FOR DATA'
-        d={**self._draft,'preset':'Traffic','logo':project.get('logo',''),'color':project.get('color','#89dcff'),'logoPlate':project.get('logoPlate',False)}
-        stats={'siteUrl':'sc-domain:'+project['site'],'displayName':project.get('name',project['site']),'liveMetrics':record,'freshness':freshness}
-        if still: d['effect']='Still'
-        return compose(d,elapsed%self._draft['duration'],stats=stats)
+        from .livecanvas import draw
+        return draw(project, self._live_data, record, elapsed % self._draft['duration'],
+                    self._draft['duration'], freshness, still or self._draft['effect']=='Still')
+
     draft = Property('QVariantMap', lambda s:s._draft, notify=changed)
     busy = Property(bool, lambda s:s._busy, notify=changed)
     error = Property(str, lambda s:s._error, notify=changed)
