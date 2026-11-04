@@ -13,7 +13,9 @@ PageScroll {
     property int liveTick: 0
     readonly property bool portfolioMode: page.d.preset === "Projects" || page.d.preset === "Live projects"
     readonly property bool liveMode: page.d.preset === "Live projects"
-    Timer { interval: appState.reduceMotion ? 1000 : 200; running: page.shown && page.liveMode; repeat: true; onTriggered: page.liveTick++ }
+    // A built snapshot replaces the live canvas so the clip itself is what gets reviewed.
+    readonly property bool showLive: page.liveMode && !screenStudio.ready
+    Timer { interval: appState.reduceMotion ? 1000 : 40; running: page.shown && page.showLive && !screenStudio.busy; repeat: true; onTriggered: page.liveTick++ }
     PageHeader {
         title: "Screen Studio"
         subtitle: "A little screen. Entirely yours."
@@ -34,10 +36,10 @@ PageScroll {
                 Rectangle {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 12, 350); height: width; radius: width / 2
-                    color: (screenStudio.preview || page.liveMode) ? theme.panel : "#070c12"; border.color: theme.border; border.width: (screenStudio.preview || page.liveMode) ? 0 : 6
+                    color: (screenStudio.preview || page.showLive) ? theme.panel : "#070c12"; border.color: theme.border; border.width: (screenStudio.preview || page.showLive) ? 0 : 6
                     Rectangle {
                         anchors.fill: parent; anchors.margins: 12
-                        radius: width / 2; color: "transparent"; border.color: theme.accent; opacity: 0.35; visible: !screenStudio.preview && !page.liveMode
+                        radius: width / 2; color: "transparent"; border.color: theme.accent; opacity: 0.35; visible: !screenStudio.preview && !page.showLive
                     }
                     Item {
                         anchors.fill: parent; anchors.margins: 18
@@ -45,10 +47,10 @@ PageScroll {
                             id: animation
                             anchors.fill: parent; source: screenStudio.preview
                             playing: page.shown && !appState.reduceMotion && !screenStudio.busy
-                            visible: !appState.reduceMotion && !page.liveMode; cache: false
+                            visible: !appState.reduceMotion && !page.showLive; cache: false
                         }
-                        Image { id: poster; anchors.fill: parent; source: screenStudio.poster; visible: appState.reduceMotion && !page.liveMode }
-                        Image { anchors.fill: parent; source: page.liveMode ? "image://studio/"+(appState.reduceMotion ? "still/" : "live/")+page.liveTick : ""; visible: page.liveMode; cache: false }
+                        Image { id: poster; anchors.fill: parent; source: screenStudio.poster; visible: appState.reduceMotion && !page.showLive }
+                        Image { anchors.fill: parent; source: page.showLive ? "image://studio/"+(appState.reduceMotion ? "still/" : "live/")+page.liveTick : ""; visible: page.showLive; cache: false }
                         Canvas {
                             anchors.fill: parent
                             Connections { target: theme; function onChanged() { parent.requestPaint() } }
@@ -63,7 +65,7 @@ PageScroll {
                             }
                         }
                         Column {
-                            anchors.centerIn: parent; spacing: 12; visible: screenStudio.preview === "" && !page.liveMode
+                            anchors.centerIn: parent; spacing: 12; visible: screenStudio.preview === "" && !page.showLive
                             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "YOUR NEXT\nSIGNATURE"; horizontalAlignment: Text.AlignHCenter; color: "#edf5fc"; font.pixelSize: 25; font.bold: true }
                             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Create a preview to begin"; color: "#a0b4c8"; font.pixelSize: 12 }
                         }
@@ -72,19 +74,23 @@ PageScroll {
             }
             Label {
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
-                text: page.liveMode ? screenStudio.liveStatus : screenStudio.busy ? "Rendering your design…" : screenStudio.ready ? "Preview ready · review before sending" : screenStudio.preview ? "Design changed · rebuild the preview" : "Your current cooler screen stays unchanged"
+                text: screenStudio.busy ? "Rendering your design…"
+                      : screenStudio.ready ? (page.liveMode ? "Snapshot ready. These numbers stay on the cooler until you send a new one." : "Preview ready · review before sending")
+                      : page.liveMode ? screenStudio.liveStatus
+                      : screenStudio.preview ? "Design changed · rebuild the preview" : "Your current cooler screen stays unchanged"
                 color: theme.muted; font.pixelSize: 12; wrapMode: Text.WordWrap
             }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                Button { objectName: "renderButton"; text: screenStudio.busy ? "Rendering…" : "Build preview"; highlighted: true; enabled: !screenStudio.busy && !page.uploading && !page.liveMode; onClicked: screenStudio.render() }
+                Button { objectName: "renderButton"; text: screenStudio.busy ? "Rendering…" : "Build preview"; highlighted: true; enabled: !screenStudio.busy && !page.uploading; onClicked: screenStudio.render() }
                 Button {
                     text: "Send to cooler"
-                    enabled: !page.liveMode && screenStudio.ready && !screenStudio.busy && page.cool && page.cool.connected && !page.uploading
+                    enabled: screenStudio.ready && !screenStudio.busy && page.cool && page.cool.connected && !page.uploading
                     onClicked: page.cool.uploadStudio(screenStudio.output)
                     ToolTip.visible: hovered
                     ToolTip.text: "Play only this design; keep older files stored"
                 }
+                Button { visible: page.liveMode && screenStudio.ready; text: "Back to live"; enabled: !screenStudio.busy; onClicked: screenStudio.clearPreview() }
             }
             Label { Layout.fillWidth: true; visible: page.uploading; text: page.cool ? page.cool.busy : ""; color: theme.accent; wrapMode: Text.WordWrap }
             Banner { visible: screenStudio.error !== ""; tone: "error"; text: screenStudio.error }
@@ -157,8 +163,9 @@ PageScroll {
                 title: page.d.preset === "Traffic" ? "MacDigital · search pulse" : "Your project rotation"
                 subtitle: page.liveMode ? "See when traffic arrived and how it was served." : "Real numbers. A cinematic presentation."
                 Label { Layout.fillWidth: true; text: page.liveMode ? screenStudio.liveStatus : page.d.preset === "Projects" ? screenStudio.projects.map(p => p.name).join(" · ") : screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
-                Label { Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute. Requests include bots and assets, not unique visitors. The physical LCD live overlay is still under verification." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
-                Label { visible: page.liveMode; Layout.fillWidth: true; text: "Outer bars: requests per minute, on one shared scale across sites. The moving marker replays recorded minutes. Mint ring: cache hit percentage. 5xx: server errors. Empty minutes stay empty; stale data pauses the replay."; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute while this page is open. Requests include bots and assets, not unique visitors." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { visible: page.liveMode; Layout.fillWidth: true; text: "The waterline is the last 15 minutes, oldest on the left. A taller wave means more requests that minute, on one shared scale across your sites. Droplets are requests, up to 24 a minute, and the count climbs to the real total. Calm water means no requests. An empty glass means no data."; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { visible: page.liveMode; Layout.fillWidth: true; text: "The cooler plays saved clips, so Send to cooler stores a snapshot marked with its time. Those numbers stay until you send a new one."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
                 Button { visible: !page.portfolioMode; text: "Import analytics snapshot"; enabled: !screenStudio.busy; onClicked: statsFile.open() }
                 Button { visible: page.liveMode; text: "Refresh Cloudflare now"; onClicked: screenStudio.refreshLive() }
                 Label { visible: page.portfolioMode; Layout.fillWidth: true; text: screenStudio.projects.map(p => p.name).join(" · "); color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }

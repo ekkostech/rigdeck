@@ -1,5 +1,6 @@
 """Local screen composition. Rendering never opens or writes a USB device."""
 from __future__ import annotations
+from datetime import datetime, timezone
 import json
 import math
 import os
@@ -8,12 +9,14 @@ import subprocess
 import tempfile
 import uuid
 
-from PySide6.QtCore import Property, QObject, QRectF, Qt, QUrl, Signal, Slot, QTimer
+from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, QUrl, Signal, Slot, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPen, QRadialGradient
 from PySide6.QtSvg import QSvgRenderer
 from .bridge import run_async
+from .livecanvas import clock, draw, load_logo
 
 ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'rigdeck'
+STALE_AFTER = 180  # seconds; older Cloudflare numbers are shown as stale and never built into a clip
 DEFAULT = dict(text='YOUR SIGNATURE', subtitle='AORUS · WATERFORCE', font='Adwaita Sans',
                size=26, color='#89dcff', background='#090f17', effect='Orbit', y=170,
                media='', logo='', preset='Signature', duration=6)
@@ -79,9 +82,8 @@ def compose(d, t=0, background=None, stats=None):
     if d['logo']:
         p.save()
         p.translate(160, 90)
-        if d.get('logoPlate'):
-            p.setPen(Qt.NoPen); p.setBrush(QColor('#eff7fc')); p.drawRoundedRect(QRectF(-82,-34,164,68),8,8)
-        if d['logo'].lower().endswith('.svg'):
+        tint = d.get('logoTint', '')
+        if d['logo'].lower().endswith('.svg') and not tint:
             logo = QSvgRenderer(d['logo'])
             if not logo.isValid():
                 p.end(); raise ValueError('The logo SVG could not be read.')
@@ -90,11 +92,10 @@ def compose(d, t=0, background=None, stats=None):
                 p.setOpacity(.12); logo.render(p, QRectF(-38+depth, -34+depth, 76, 67))
             p.setOpacity(1); logo.render(p, QRectF(-38, -34, 76, 67))
         else:
-            logo = QImage(d['logo'])
+            logo = load_logo(d['logo'], 150, 65, tint)
             if logo.isNull():
                 p.end(); raise ValueError('Choose a readable PNG, WebP, JPEG or SVG logo.')
-            logo = logo.scaled(150, 65, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            p.drawImage(-logo.width()/2, -logo.height()/2, logo)
+            p.drawImage(QPointF(-logo.width()/2, -logo.height()/2), logo)
         p.restore()
     else:
         line(p, 'SCREEN STUDIO', 72, 12, '#a0b4c8')
@@ -146,6 +147,15 @@ def command(args):
         raise ValueError('Media conversion failed: '+r.stderr.decode(errors='replace')[-400:])
 
 
+def encode(frames, folder, gif_fps=15):
+    """Encode numbered frames to the device format, plus the GIF reviewed before sending."""
+    output = folder/('studio-'+uuid.uuid4().hex[:8]+'.mkv')
+    command(['-framerate','25','-i',str(frames/'out-%04d.png'),'-an','-c:v','libx264',
+             '-profile:v','main','-level:v','3.1','-pix_fmt','yuv420p','-bf','0','-b:v','1000k',str(output)])
+    command(['-i',str(output),'-vf',f'fps={gif_fps},split[a][b];[a]palettegen[p];[b][p]paletteuse',str(folder/'preview.gif')])
+    return output
+
+
 def render(values, folder, stats=None):
     d = validate(values); folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='rigdeck-frames-') as temp:
@@ -158,10 +168,7 @@ def render(values, folder, stats=None):
             bg = QImage(str(backgrounds[i % len(backgrounds)])) if backgrounds else None
             frame = compose(d, i/25, bg, stats)
             frame.save(str(frames/f'out-{i:04}.png'))
-        output = folder/('studio-'+uuid.uuid4().hex[:8]+'.mkv')
-        command(['-framerate','25','-i',str(frames/'out-%04d.png'),'-an','-c:v','libx264',
-                 '-profile:v','main','-level:v','3.1','-pix_fmt','yuv420p','-bf','0','-b:v','1000k',str(output)])
-        command(['-i',str(output),'-vf','fps=15,split[a][b];[a]palettegen[p];[b][p]paletteuse',str(folder/'preview.gif')])
+        output = encode(frames, folder)
         # First frame for reduced-motion preview.
         compose(d, 0, QImage(str(backgrounds[0])) if backgrounds else None, stats).save(str(folder/'poster.png'))
     return str(output)
@@ -220,13 +227,11 @@ class ScreenStudio(QObject):
         run_async(lambda:fetch([p['site'] for p in self._projects]),done,failed)
     def live_frame(self, elapsed, still=False):
         if not self._projects: return compose({**DEFAULT,'text':'NO PROJECTS'})
-        from datetime import datetime, timezone
         index=int(elapsed/self._draft['duration'])%len(self._projects); project=self._projects[index]
         record=next((r for r in self._live_data.get('sites',[]) if r['site']==project['site']),{'error':'Waiting for data'})
         stamp=self._live_data.get('fetchedAt')
         age=int((datetime.now(timezone.utc)-datetime.fromisoformat(stamp)).total_seconds()) if stamp else None
-        freshness=('STALE · ' if age is not None and age>180 else 'UPDATED · ')+str(age)+'s AGO' if age is not None else 'WAITING FOR DATA'
-        from .livecanvas import draw
+        freshness=f'Stale, {age}s old' if age is not None and age>STALE_AFTER else f'Updated {age}s ago' if age is not None else 'Waiting for data'
         return draw(project, self._live_data, record, elapsed % self._draft['duration'],
                     self._draft['duration'], freshness, still or self._draft['effect']=='Still')
 
@@ -268,8 +273,6 @@ class ScreenStudio(QObject):
         except (ValueError, TypeError) as e:
             self._error=str(e); self.changed.emit(); return
         self._busy=True; self._error=''; self._output=''; self.changed.emit()
-        if d['preset']=='Live projects':
-            self._busy=False; self._error='Live preview refreshes automatically. Hardware live output is being verified; video upload is disabled in this mode.'; self.changed.emit(); return
         folder=Path(self._temp.name)/uuid.uuid4().hex
         def done(path):
             self._output=path; self._preview=QUrl.fromLocalFile(str(folder/'preview.gif')).toString()
@@ -277,7 +280,14 @@ class ScreenStudio(QObject):
             self._busy=False; self.changed.emit()
         def failed(e):
             self._busy=False; self._error=str(e); self.changed.emit()
-        run_async(lambda:render_projects(d,folder,self._projects) if d["preset"]=="Projects" else render(d,folder,self._stats),done,failed)
+        jobs={'Projects':lambda:render_projects(d,folder,self._projects),
+              'Live projects':lambda:render_live(d,folder,self._projects,self._live_data)}
+        run_async(jobs.get(d['preset'],lambda:render(d,folder,self._stats)),done,failed)
+    @Slot()
+    def clearPreview(self):
+        """Leave a built snapshot and return to the live canvas."""
+        if self._busy: return
+        self._output=''; self._error=''; self.changed.emit()
 
 
 def render_projects(values, folder, projects):
@@ -287,7 +297,7 @@ def render_projects(values, folder, projects):
     folder=Path(folder); folder.mkdir(parents=True,exist_ok=True)
     clips=[]
     for i,project in enumerate(projects):
-        d={**values,'preset':'Traffic','logo':project.get('logo',''),'color':project.get('color',values['color']),'logoPlate':project.get('logoPlate',False)}
+        d={**values,'preset':'Traffic','logo':project.get('logo',''),'color':project.get('color',values['color']),'logoTint':project.get('logoTint','')}
         stats={**project['snapshot'],'displayName':project.get('name',project['site'])}
         clips.append(render(d,folder/str(i),stats))
     listing=folder/'concat.txt'
@@ -296,4 +306,34 @@ def render_projects(values, folder, projects):
     command(['-f','concat','-safe','0','-i',str(listing),'-c','copy',str(output)])
     command(['-i',str(output),'-vf','fps=10,split[a][b];[a]palettegen[p];[b][p]paletteuse',str(folder/'preview.gif')])
     (folder/'poster.png').write_bytes((folder/'0'/'poster.png').read_bytes())
+    return str(output)
+
+
+def render_live(values, folder, projects, report):
+    """One full rotation of the live canvas. The cooler only plays stored clips and its flash
+    must not be rewritten on a timer, so this is a labelled snapshot built on request."""
+    if not projects: raise ValueError('No projects configured.')
+    if len(projects)>20: raise ValueError('Use at most 20 projects.')
+    stamp=report.get('fetchedAt') if isinstance(report,dict) else None
+    if not stamp: raise ValueError('Cloudflare numbers have not arrived yet. Choose Refresh Cloudflare now, then build again.')
+    captured=datetime.fromisoformat(stamp)
+    if (datetime.now(timezone.utc)-captured).total_seconds()>STALE_AFTER:
+        raise ValueError('These Cloudflare numbers are over 3 minutes old. Choose Refresh Cloudflare now, then build again.')
+    records=[next((r for r in report.get('sites',[]) if r['site']==p['site']),{'error':'Not in report'}) for p in projects]
+    if all(r.get('error') for r in records):
+        raise ValueError('Cloudflare returned no usable numbers. Choose Refresh Cloudflare now, then build again.')
+    folder=Path(folder); folder.mkdir(parents=True,exist_ok=True)
+    frames_per_site=values['duration']*25
+    freshness=f'As of {clock(captured)}'
+    still=values['effect']=='Still'
+    def frame(project,record,seconds):
+        return draw(project,report,record,seconds,values['duration'],freshness,still)
+    with tempfile.TemporaryDirectory(prefix='rigdeck-frames-') as temp:
+        frames=Path(temp)
+        for i,(project,record) in enumerate(zip(projects,records)):
+            for n in range(frames_per_site):
+                frame(project,record,n/25).save(str(frames/f'out-{i*frames_per_site+n:04}.png'))
+        output=encode(frames,folder,gif_fps=10)
+    # The result of the first site's replay, not the calm water it starts from.
+    frame(projects[0],records[0],values['duration']*.85).save(str(folder/'poster.png'))
     return str(output)

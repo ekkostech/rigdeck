@@ -29,9 +29,11 @@ The static web audit does not inspect QML; native Qt screenshots, interaction te
 
 ScreenStudio owns the configured project rotation. Cloudflare fetches execute
 on the owner's Mac through its GUI vault bridge, return aggregates only, and
-never expose tokens to the frontend. Live projects uses an image provider rather
-than video encoding. It is a desktop preview until native LCD output is verified.
-Unavailable and stale values are distinct from zero traffic. Studio uploads
+never expose tokens to the frontend. The Live projects preview uses an image
+provider rather than video encoding. Building it renders one rotation from the
+latest fresh fetch into a dated clip; a send is always an explicit owner action,
+never a timer, so the cooler's flash is not rewritten on a schedule. Unavailable
+and stale values are distinct from zero traffic. Studio uploads
 select the new clip exclusively and disable legacy GCC overlays; existing files
 are retained. Core cooler upload behavior is unchanged for the original screen
 media manager.

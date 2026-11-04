@@ -82,37 +82,54 @@ Reduced motion freezes rendered previews on their poster and stops decorative mo
 ## Project display variants
 
 Each locally configured project supplies its real logo and accent colour within
-the shared circular bezel. A light logo plate is permitted for dark artwork
-such as Mary Cleaning's mark. Wide logos preserve their aspect ratio. Project
+the shared circular bezel. A dark one-colour mark takes a `logoTint` rather than
+a plate, so no box ever sits behind a logo. Wide logos preserve their aspect ratio. Project
 controls hide single-logo and accent choices that would be overridden by the
 rotation. Live metrics show the source window and fetch age; decorative motion
 never implies fresh events.
 
-Logos stay fixed in position and scale; no breathing or bobbing. Motion belongs to the surrounding bezel.
+Logos stay fixed in position and scale; no breathing or bobbing. Motion belongs to the water.
 
 
-## Cloudflare traffic replay — design direction
+## Sight glass — live traffic design direction
 
-Subject: six monitored websites on a circular 320px instrument; the job is to
-show the shape of recent request traffic and the cache share at a glance.
+Subject: six monitored websites on a 2-inch round LCD on a liquid cooler, read
+from across a room. The job is one glance: which site, how much traffic, and
+whether it was served cleanly. The screen is treated as what it physically is,
+a round window on a cooling loop.
 
-Tokens: graphite #09121b, track #263b4b, frost #d4f3ff, muted #8da9b9,
-cache mint #79dcc5, error coral #ff806f. Site accents retain their brand meaning.
-Nimbus Sans Narrow carries the stable request total; Adwaita Sans labels the
-site; Adwaita Mono gives times and measured units consistent spacing.
+Principle: nothing moves unless a measured request caused it.
 
-Layout: minute bars wrap 270 degrees around a fixed logo and a stable metric
-stack; an inner mint arc shows cache percentage. The lower opening is a replay
-caption and fetch age. A highlighted minute follows recorded time, not wall time.
+Tokens: void #000000 (LCD black disappears into the pump bezel), ice #f2fbff,
+faint #c3d4de, muted #8fa6b4, alarm #ff5a4d. Each site's accent is its water.
+Adwaita Sans throughout: Black for the count, semibold for everything else, no
+monospace, nothing under 13px, no stroke under 3px. Fine detail does not survive
+1 Mbit/s H.264 on a screen this size.
 
-    [ measured minute bars / shared linear scale ]
-    [ cache-share arc / fixed brand mark         ]
-    [ total requests / cache / 5xx / bandwidth   ]
-    [ replay minute + its requests / fetch age  ]
+Layout: a fixed logo; a count large enough to read from a distance; the waterline
+across the full width; cache, data and errors in the deep water; the replay
+minute or the fetch age beneath. Four rows of text, down from eight.
 
-Critique: discarded the decorative spinning arcs and three-number carousel.
-A simulated particle stream would imply request-level timing we do not have;
-minute history uses the actual granularity available. A shared scale makes
-quiet and busy sites distinguishable. Zero-minute ticks are baseline markers,
-not positive bars. Empty, stale and unavailable data do not animate activity.
-Reduced motion stops the replay marker while keeping measured content visible.
+    [ fixed logo, no plate                            ]
+    [ request count / flips colour where it is under  ]
+    [ waterline: 15 minutes, oldest on the left       ]
+    [ cached / data / errors                          ]
+    [ replay minute, or fetch age                     ]
+
+Motion: the replay rises the water minute by minute and the count climbs with it,
+ending on the real total. A minute's droplets, one per request up to 24, launch
+together when the replay reaches that minute, so the count is measured and no
+sub-minute timing is implied. The water falls calm before the next site, so sites
+share one continuous waterline and only the colour changes.
+
+States: calm water is zero requests. An empty glass is no data, so unknown cannot
+be read as zero. Grey water is stale and does not replay. Reduced motion shows the
+finished state, identical to the end of a replay.
+
+Scale: logarithmic and shared across the portfolio. A linear scale reduced a lone
+request to a few pixels beside a burst on another site, and a per-site scale would
+draw one request as a tidal wave. The count carries the exact figure.
+
+Critique: a thicker gauge ring was the obvious upgrade, and also what every AIO
+screen already looks like. Discarded the cache arc, the SCALE label and the
+site-name row, which the logo already covers.

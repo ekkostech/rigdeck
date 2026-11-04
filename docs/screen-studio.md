@@ -58,23 +58,41 @@ sampled and ingested with delay. The preview displays elapsed time since the
 last successful fetch and explicitly marks stale data after three minutes.
 
 `~/.config/rigdeck/projects.json` holds a list of `{site, name, logo, color,
-logoPlate?, snapshot}` records. These owner assets and analytics stay outside Git.
+logoTint?, snapshot}` records. These owner assets and analytics stay outside Git.
+`logoTint` recolours a logo while keeping its shape: use it for a dark one-colour
+mark that would disappear on a dark screen, for example `"logoTint": "#ffffff"`.
 The Cloudflare adapter uses the existing `mac` SSH host and `ekkos-gui-run` to
 read `cloudflare-main` inside the Mac vault process. Only aggregate metrics
 return to Linux; no credentials are copied or placed in files. Polling is once
-per minute without overlapping requests. Missing data appears unavailable.
+per minute while the app runs, without overlapping requests. Missing data appears
+unavailable.
 
-Live hardware output remains under verification; the app deliberately disables
-video upload in Live projects. It does not silently convert a live preview into
-a permanently stale video, nor repeatedly rewrite the cooler flash. The known
-native CPU-name field can be updated with command E1, but on-screen behavior
-needs physical verification. The owner was asked to observe a bounded native
-mode-2 test; original display settings were restored afterward.
+### Reading the sight glass
 
-The live canvas now uses minute bars on a shared linear scale across the fetched
-portfolio. The first and last buckets can be partial minutes because the source
-window is exactly 15 minutes. A sweep explicitly labelled REPLAY follows those
-buckets and displays their local-clock minute and request count. It is not a
-per-request event stream. The inner arc maps cache share to 0–100%; totals,
-5xx errors and bandwidth remain visible. Zero windows, missing data, stale
-data and reduced motion stop the sweep. Logos never move or change scale.
+The waterline is the last 15 minutes of requests, oldest minute on the left. The
+first and last minutes can be partial because the source window is exactly 15
+minutes. Height is logarithmic on one scale shared by every site, so a burst on
+one site does not flatten a single request on another. The scale starts at 10
+requests a minute, so a quiet portfolio is not drawn as a flood.
+
+A replay raises the water minute by minute and the count climbs through the
+recorded minutes to the real total. Droplets are requests, up to 24 per minute;
+a minute's droplets launch together because per-minute is the finest timing the
+source provides. Replay is labelled with the minute it is showing.
+
+Calm water means no requests. An empty glass means no data. Grey water means the
+numbers are over three minutes old, and it does not replay. Turning off **Replay
+minute history**, or reduced motion, shows the finished state. Logos never move
+or change scale.
+
+### Sending Live projects to the cooler
+
+The cooler only plays clips stored in its flash. **Build preview** turns the
+latest fetched numbers into one full rotation, seconds per site × sites long, and
+**Send to cooler** stores that clip. It is a snapshot, not a live feed: each site
+shows `As of <time>` and the numbers stay until you send another one. Building is
+refused when the numbers are missing, over three minutes old or unusable; choose
+**Refresh Cloudflare now** and build again. The desktop preview stays live. Nothing
+sends to the cooler on a timer, because rewriting its flash every minute would wear
+it out. A flash-free live path through the native CPU-name field (command E1) is
+untested on the physical display.

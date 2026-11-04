@@ -7,6 +7,12 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.5 — 2026-11-04
+
+- Redesign Live projects as a sight glass: the waterline is the last 15 minutes of requests, with a count you can read from across the room.
+- Build Live projects into a clip and send it to the cooler as a dated snapshot.
+- Add `logoTint` for dark one-colour logos, replacing the white logo plate.
+
 ## 0.8.3+ice.4 — 2026-11-03
 
 - Turn live project previews into measured minute-history replays with a shared traffic scale and cache-share arc.
