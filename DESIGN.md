@@ -87,3 +87,5 @@ such as Mary Cleaning's mark. Wide logos preserve their aspect ratio. Project
 controls hide single-logo and accent choices that would be overridden by the
 rotation. Live metrics show the source window and fetch age; decorative motion
 never implies fresh events.
+
+Logos stay fixed in position and scale; no breathing or bobbing. Motion belongs to the surrounding bezel.

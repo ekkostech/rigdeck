@@ -7,6 +7,10 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.3 — 2026-11-03
+
+- Keep logos fixed in position and scale while the surrounding display animation continues.
+
 ## 0.8.3+ice.2 — 2026-11-03
 
 - Rotate configured project logos and search snapshots in Screen Studio.

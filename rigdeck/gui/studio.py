@@ -78,8 +78,7 @@ def compose(d, t=0, background=None, stats=None):
                    int(160+math.sin(a)*(r-length)), int(160+math.cos(a)*(r-length)))
     if d['logo']:
         p.save()
-        p.translate(160, 90 + math.sin(phase)*3)
-        p.scale(1 + math.sin(phase)*0.025, 1)
+        p.translate(160, 90)
         if d.get('logoPlate'):
             p.setPen(Qt.NoPen); p.setBrush(QColor('#eff7fc')); p.drawRoundedRect(QRectF(-82,-34,164,68),8,8)
         if d['logo'].lower().endswith('.svg'):
