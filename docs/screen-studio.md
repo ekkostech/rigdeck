@@ -96,3 +96,27 @@ refused when the numbers are missing, over three minutes old or unusable; choose
 sends to the cooler on a timer, because rewriting its flash every minute would wear
 it out. A flash-free live path through the native CPU-name field (command E1) is
 untested on the physical display.
+
+## Once-a-day update
+
+`rigdeck studio-daily` keeps the Projects clip current without anyone opening
+the app:
+
+1. It runs the command in `~/.config/rigdeck/studio-daily.json`, for example
+   `{"command": ["macdigital-search", "all", "--json"]}`. The command prints
+   `{"sites": [...]}`, one 28-day Search Console summary per site.
+2. Each project in `projects.json` whose site returned usable, newer numbers
+   gets them. A site that returned nothing keeps the numbers it had, and its
+   card keeps showing their own end date.
+3. It builds one Projects clip, stores it as `daily-<date>-<id>.mkv`, makes it
+   the only clip playing, and then removes earlier `daily-` clips. Clips with
+   any other name are never removed.
+
+The cooler only plays clips stored in its flash, so this is a storage write.
+Once a day is a few hundred writes a year. When neither the numbers nor the
+look changed since the last send, nothing is written. If the cooler cannot be
+reached or has no room, the earlier clip and the earlier numbers stay.
+
+`--dry-run` fetches and builds into `studio-daily-preview/` without touching
+the cooler or `projects.json`; `--force` sends even when nothing changed.
+Run it from a systemd user timer to make it daily.

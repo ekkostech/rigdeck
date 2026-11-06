@@ -44,6 +44,23 @@ def validate(values):
     return d
 
 
+def check_stats(s):
+    """Refuse anything that is not a usable 28-day Search Console snapshot."""
+    if not isinstance(s, dict): raise ValueError('Snapshot must be a JSON object.')
+    if not isinstance(s.get('siteUrl'),str) or not s['siteUrl'].startswith(('sc-domain:', 'https://')): raise ValueError('Choose a Search Console snapshot with a site URL.')
+    for k in ('clicks','impressions','ctr'):
+        if isinstance(s['current'][k], bool) or not isinstance(s['current'][k], (int,float)) or not math.isfinite(s['current'][k]) or s['current'][k] < 0:
+            raise ValueError('Snapshot contains invalid metrics.')
+    from datetime import date
+    date.fromisoformat(s['range']['endDate']); date.fromisoformat(s['range']['startDate'])
+    if s['range']['days'] != 28: raise ValueError('Use a 28-day snapshot.')
+    if len(s.get('dailyRows',[])) > 31: raise ValueError('Too many daily rows.')
+    for r in s.get('dailyRows',[]):
+        if not isinstance(r['impressions'], (int,float)) or not math.isfinite(r['impressions']) or r['impressions'] < 0:
+            raise ValueError('Invalid daily impressions.')
+    return s
+
+
 def line(p, text, y, size, color, font='Adwaita Sans', bold=False):
     f = QFont(font); f.setPixelSize(size); f.setBold(bold)
     p.setFont(f); p.setPen(QColor(color))
@@ -199,20 +216,7 @@ class ScreenStudio(QObject):
     @staticmethod
     def read_stats(path):
         if Path(path).stat().st_size > 1_000_000: raise ValueError('Snapshot must be smaller than 1 MB.')
-        s = json.loads(Path(path).read_text())
-        if not isinstance(s, dict): raise ValueError('Snapshot must be a JSON object.')
-        if not isinstance(s.get('siteUrl'),str) or not s['siteUrl'].startswith(('sc-domain:', 'https://')): raise ValueError('Choose a Search Console snapshot with a site URL.')
-        for k in ('clicks','impressions','ctr'):
-            if not isinstance(s['current'][k], (int,float)) or not math.isfinite(s['current'][k]) or s['current'][k] < 0:
-                raise ValueError('Snapshot contains invalid metrics.')
-        from datetime import date
-        date.fromisoformat(s['range']['endDate']); date.fromisoformat(s['range']['startDate'])
-        if s['range']['days'] != 28: raise ValueError('Use a 28-day snapshot.')
-        if len(s.get('dailyRows',[])) > 31: raise ValueError('Too many daily rows.')
-        for r in s.get('dailyRows',[]):
-            if not isinstance(r['impressions'], (int,float)) or not math.isfinite(r['impressions']) or r['impressions'] < 0:
-                raise ValueError('Invalid daily impressions.')
-        return s
+        return check_stats(json.loads(Path(path).read_text()))
     projects = Property('QVariantList', lambda s:s._projects, constant=True)
     liveStatus = Property(str, lambda s:'Refreshing Cloudflare…' if s._refreshing else s._live_error or ('Cloudflare · rolling 15 minutes · refreshes every minute · includes bots' if s._live_data else 'Connecting to Cloudflare…'), notify=changed)
     @Slot()

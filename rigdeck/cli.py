@@ -73,6 +73,11 @@ def cmd_import(a):
         sys.exit(1)
 
 
+def cmd_studio_daily(a):
+    from .gui import daily
+    sys.exit(daily.run(dry_run=a.dry_run, force=a.force, out=a.out))
+
+
 def cmd_service(a):
     from .service import run
     run()
@@ -96,6 +101,12 @@ def main():
     im.add_argument("file")
     im.add_argument("--check", action="store_true", help="only check the file, change nothing")
     im.set_defaults(func=cmd_import)
+    sd = sub.add_parser("studio-daily", help="once a day: fetch fresh Search Console numbers, "
+                        "send one new clip to the cooler and remove the previous one")
+    sd.add_argument("--dry-run", action="store_true", help="fetch and build only; nothing touches the cooler")
+    sd.add_argument("--force", action="store_true", help="send even when the numbers have not changed")
+    sd.add_argument("--out", help="with --dry-run: folder for the built clip")
+    sd.set_defaults(func=cmd_studio_daily)
     for m in MODULES:
         m.add_cli(sub)
     a = ap.parse_args()
