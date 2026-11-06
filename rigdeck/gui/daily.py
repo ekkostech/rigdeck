@@ -154,7 +154,8 @@ def run(dry_run=False, force=False, out=None, today=None, open_cooler=None, say=
         return 0 if updated else 1
 
     day = (today or date.today()).strftime('%Y%m%d')
-    name = f'{PREFIX}{day}-{mark[:6]}.mkv'
+    # A forced send of an unchanged picture needs a name the cooler does not hold yet.
+    name = f'{PREFIX}{day}-{datetime.now():%H%M%S}.mkv' if force else f'{PREFIX}{day}-{mark[:6]}.mkv'
     with tempfile.TemporaryDirectory(prefix='rigdeck-daily-') as temp:
         try:
             clip = build(projects, values, Path(temp))

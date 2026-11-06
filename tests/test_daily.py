@@ -93,7 +93,10 @@ def test_does_not_write_the_cooler_again_when_nothing_changed(home):
     before = list(cooler.log)
     code, said = run(home, cooler)
     assert code == 0 and cooler.log == before and 'nothing was sent' in said
-    assert run(home, cooler, force=True)[1].count('already on the cooler') == 1   # same day, same picture: refuse a duplicate
+    first = cooler.files[0]
+    code, said = run(home, cooler, force=True)                                  # forced: a second clip replaces the first
+    assert code == 0 and len(cooler.files) == 1 and cooler.files[0] != first and cooler.playing == cooler.files
+    assert f'Removed {first}' in said
 
 
 def test_one_unreadable_site_keeps_its_dated_numbers_while_the_rest_update(home):

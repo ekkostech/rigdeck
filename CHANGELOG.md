@@ -7,6 +7,8 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.6 — 2026-11-05
+
 - Add `rigdeck studio-daily`: once a day it fetches fresh 28-day Search Console numbers, sends one new Projects clip to the cooler and removes the clip it sent before. It skips the send when nothing changed, and a site whose numbers could not be fetched keeps its earlier, dated numbers.
 
 ## 0.8.3+ice.5 — 2026-11-04
