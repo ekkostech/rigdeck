@@ -368,7 +368,8 @@ class CoolerBackend(QObject):
             media.make_preview(path, name)
             if len(data) > c.storage_free_kb() * 1024:
                 raise media.MediaError("not enough space on the cooler")
-            c.upload_media(data, name, progress)
+            from ...gui.bridge import on_main
+            c.upload_media(data, name, progress, note=lambda text: on_main(lambda: self._set_busy(text)))
             screen = add_to_carousel(c, name)
             if exclusive:
                 screen.write(c, screen.files, [name])

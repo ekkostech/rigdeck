@@ -7,6 +7,9 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+- Storing a clip now holds the cooler alone: the service and the app pause for the few seconds of the transfer, uploads are spaced two minutes from the last stored or deleted clip, and an upload only counts once the cooler lists the file.
+- The free-space reading is asked for again while the cooler settles after a write.
+
 ## 0.8.3+ice.6 — 2026-11-05
 
 - Add `rigdeck studio-daily`: once a day it fetches fresh 28-day Search Console numbers, sends one new Projects clip to the cooler and removes the clip it sent before. It skips the send when nothing changed, and a site whose numbers could not be fetched keeps its earlier, dated numbers.

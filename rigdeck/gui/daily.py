@@ -117,13 +117,14 @@ def send(path: str, name: str, open_cooler=None):
             raise ValueError(f'{name} is already on the cooler.')
         if len(data) > c.storage_free_kb() * 1024:
             raise ValueError('Not enough space on the cooler for the new clip.')
-        c.upload_media(data, name)
+        c.upload_media(data, name)      # waits for quiet, holds the cooler alone while sending, confirms the file
         screen = add_to_carousel(c, name)
         screen.write(c, screen.files, [name])
         c.send(b'\xc0\x00\x00\x00')  # no stock text, logo or readouts over the clip
         c.save()
         removed = []
         for old in [f for f in screen.files if f.startswith(PREFIX) and f != name]:
+            c.settle()                  # never two storage changes close together
             screen = delete_media(c, old, screen)
             removed.append(old)
         return removed, c.storage_free_kb()

@@ -5,10 +5,13 @@ Every report uses HID report ID 0x99; output reports are 6144 bytes, input repor
 """
 from __future__ import annotations
 
+import contextlib
 import errno
+import fcntl
 import glob
 import os
 import select
+import tempfile
 import time
 from dataclasses import dataclass
 from enum import IntEnum
@@ -22,6 +25,35 @@ REPORT_ID = 0x99
 OUT_LEN = 6144
 IN_LEN = 256
 CHUNK = OUT_LEN - 3  # upload payload per 0xF2 report
+SETTLE = 120  # seconds the cooler is left alone after it stores or deletes a clip, before the next upload
+CONFIRM = 60  # seconds to wait for an uploaded clip to show up in the cooler's own listing
+
+
+def _lock_path() -> str:
+    return os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), "rigdeck-cooler.lock")
+
+
+def _flash_stamp() -> str:
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return os.path.join(base, "rigdeck", "cooler-flash")
+
+
+def last_flash() -> float:
+    """When any rigdeck program last made the cooler store or delete a clip (0 if never)."""
+    try:
+        return os.stat(_flash_stamp()).st_mtime
+    except OSError:
+        return 0.0
+
+
+def mark_flash():
+    path = _flash_stamp()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a"):
+            os.utime(path, None)
+    except OSError:
+        pass
 
 
 class SpeedType(IntEnum):
@@ -122,8 +154,62 @@ class Cooler:
         except PermissionError as e:
             raise CoolerError(f"no permission for {path}; install the rigdeck udev rule (see README)") from e
 
+    # Storing a clip is the one long conversation with the cooler. On 2026-11-05 a second upload
+    # sent two minutes after the first, with the service and the app also talking, hung the
+    # cooler's command handler until its power was cut. So an upload holds the device alone:
+    # every other rigdeck program backs off while it runs, and uploads are spaced apart.
+    _held = 0
+    _lock_fd = None
+
+    def _lock(self) -> int:
+        if self._lock_fd is None:
+            self._lock_fd = os.open(_lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        return self._lock_fd
+
+    def _back_off_during_upload(self):
+        if self._held:
+            return
+        fd = self._lock()
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise CoolerError("the cooler is busy storing a clip") from None
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+    @contextlib.contextmanager
+    def exclusive(self, wait: float = 30.0):
+        """Hold the cooler alone: other rigdeck programs get "busy" instead of sending."""
+        if not self._held:
+            fd, deadline = self._lock(), time.monotonic() + wait
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() > deadline:
+                        raise CoolerError("another program is storing a clip on the cooler") from None
+                    time.sleep(0.2)
+        self._held += 1
+        try:
+            yield self
+        finally:
+            self._held -= 1
+            if not self._held:
+                fcntl.flock(self._lock(), fcntl.LOCK_UN)
+
+    def settle(self, note=None):
+        """Wait out the quiet time after the last stored or deleted clip."""
+        left = SETTLE - (time.time() - last_flash())
+        if left > 0:
+            if note:
+                note(f"Letting the cooler settle… {int(left) + 1} s")
+            time.sleep(left)
+
     def close(self):
         os.close(self.fd)
+        if self._lock_fd is not None:
+            os.close(self._lock_fd)
+            self._lock_fd = None
 
     def __enter__(self):
         return self
@@ -144,6 +230,7 @@ class Cooler:
         """Send one report. `payload` excludes the 0x99 report ID."""
         if len(payload) > OUT_LEN - 1:
             raise ValueError("payload too long")
+        self._back_off_during_upload()
         buf = bytes([REPORT_ID]) + payload + bytes(OUT_LEN - 1 - len(payload))
         try:
             os.write(self.fd, buf)
@@ -290,22 +377,43 @@ class Cooler:
     def set_temp_unit(self, fahrenheit: bool):
         self.send(bytes([0xAC, 1 if fahrenheit else 0]))
 
-    def upload_media(self, data: bytes, name: str, progress=None, commit_mode: int = 2):
-        """Upload an already-converted file (320x320 H.264 MKV) to the cooler's storage."""
+    def upload_media(self, data: bytes, name: str, progress=None, commit_mode: int = 2, note=None):
+        """Upload an already-converted file (320x320 H.264 MKV) to the cooler's storage.
+
+        Holds the cooler alone for the whole transfer, waits out the quiet time after the last
+        stored or deleted clip, and returns only once the cooler lists the new file.
+        `note(text)` is told when it is waiting."""
         name_b = name.encode("utf-8")
         if len(name_b) > 64:
             raise ValueError("file name too long (max 64 bytes UTF-8)")
         size = len(data).to_bytes(4, "big")
-        self.send(bytes([0xF1, 0x01]) + size + bytes([len(name_b) + 1]) + name_b)
-        time.sleep(0.01)
-        for off in range(0, len(data), CHUNK):
-            part = data[off:off + CHUNK]
-            marker = 0xFD if len(part) == CHUNK else len(part) & 0xFF
-            self.send(bytes([0xF2, marker]) + part)
-            time.sleep(0.001)
-            if progress:
-                progress(min(off + CHUNK, len(data)), len(data))
-        self.send(bytes([0xF1, commit_mode]) + size)
+        self.settle(note)              # waited out before taking the cooler, so the service keeps feeding it
+        with self.exclusive():
+            time.sleep(2.0)            # packets other programs had already sent get answered first
+            self.storage_free_kb()     # it must be answering before anything is written
+            mark_flash()
+            self.send(bytes([0xF1, 0x01]) + size + bytes([len(name_b) + 1]) + name_b)
+            time.sleep(0.01)
+            for off in range(0, len(data), CHUNK):
+                part = data[off:off + CHUNK]
+                marker = 0xFD if len(part) == CHUNK else len(part) & 0xFF
+                self.send(bytes([0xF2, marker]) + part)
+                time.sleep(0.005)
+                if progress:
+                    progress(min(off + CHUNK, len(data)), len(data))
+            self.send(bytes([0xF1, commit_mode]) + size)
+            mark_flash()
+            deadline = time.monotonic() + CONFIRM
+            while True:
+                time.sleep(1.0)
+                try:
+                    if name in self.list_media():
+                        break
+                except CoolerError:
+                    pass
+                if time.monotonic() > deadline:
+                    raise CoolerError(f"the cooler did not confirm {name}; nothing else was changed")
+            mark_flash()
 
     def carousel(self) -> tuple[list[int], int]:
         """(indexes of stored files the screen rotates through, seconds per file)."""
@@ -359,6 +467,7 @@ class Cooler:
         """Delete a stored animation (path format from GCC: B:/<name>)."""
         path = f"B:/{name}".encode("utf-8")
         self.send(bytes([0xFE, len(path)]) + path)
+        mark_flash()
 
     def list_media(self) -> list[str]:
         """Names of the GIF/video files stored on the cooler (GCC's 'Carousel List')."""

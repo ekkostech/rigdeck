@@ -79,7 +79,7 @@ def test_studio_upload_selects_only_new_clip_and_clears_legacy_text(monkeypatch)
     from types import SimpleNamespace
     from rigdeck.modules.waterforce import qt
     calls=[]
-    device=SimpleNamespace(storage_free_kb=lambda:10000,upload_media=lambda *a:calls.append('upload'),send=lambda b:calls.append(b),save=lambda:calls.append('save'))
+    device=SimpleNamespace(storage_free_kb=lambda:10000,upload_media=lambda *a,**k:calls.append('upload'),send=lambda b:calls.append(b),save=lambda:calls.append('save'))
     screen=SimpleNamespace(files=['old.mkv','new.mkv'],write=lambda c,files,playing:calls.append((files,playing)))
     monkeypatch.setattr(qt.media,'convert',lambda p:b'video')
     monkeypatch.setattr(qt.media,'make_preview',lambda *a:None)
