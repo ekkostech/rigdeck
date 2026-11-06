@@ -197,8 +197,16 @@ class Cooler:
         return [(r[4 + i * 3], (r[5 + i * 3] << 8) | r[6 + i * 3]) for i in range(4)]
 
     def storage_free_kb(self) -> int:
-        r = self.query(b"\xfa\x42")
-        return int.from_bytes(r[3:3 + r[2]], "little")
+        # The cooler can stay silent on this for several seconds while it settles after a
+        # write, so one missed reply is not a failure. Asking again changes nothing.
+        for attempt in range(4):
+            try:
+                r = self.query(b"\xfa\x42", timeout=2.0)
+                return int.from_bytes(r[3:3 + r[2]], "little")
+            except CoolerError:
+                if attempt == 3:
+                    raise
+                time.sleep(1.5)
 
     def screen_mode(self) -> int:
         return self.query(b"\xe8")[2]

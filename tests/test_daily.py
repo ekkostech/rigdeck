@@ -156,3 +156,20 @@ def test_a_failed_send_keeps_the_old_clip_and_the_old_numbers(home, cooler):
     assert code == 1 and 'Could not send the clip' in said
     assert cooler.files == ['daily-20261104-aaaaaa.mkv'] and not any(e[0] == 'delete' for e in cooler.log if isinstance(e, tuple))
     assert (home/'projects.json').read_text() == before and not (home/'studio-daily-state.json').exists()
+
+
+@pytest.mark.parametrize('misses,answers', [(2, True), (4, False)])
+def test_free_space_is_asked_again_while_the_cooler_settles(monkeypatch, misses, answers):
+    from rigdeck.modules.waterforce import device
+    monkeypatch.setattr(device.time, 'sleep', lambda s: None)
+    cooler, asked = object.__new__(device.Cooler), []
+    def query(payload, timeout=1.0, match=1):
+        asked.append(payload)
+        if len(asked) <= misses: raise device.CoolerError('no reply to command 0xfa')
+        return bytes([0x99, 0xfa, 3]) + (44000).to_bytes(3, 'little') + bytes(250)
+    cooler.query = query
+    if answers:
+        assert cooler.storage_free_kb() == 44000 and len(asked) == 3
+    else:
+        with pytest.raises(device.CoolerError): cooler.storage_free_kb()
+        assert len(asked) == 4
