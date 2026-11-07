@@ -13,7 +13,7 @@ dependencies = []  # core/CLI is pure standard library
 
 [project.optional-dependencies]
 # Prefer your distro's PySide6 package; see README.
-gui = ["PySide6>=6.5"]
+gui = ["PySide6>=6.5", "numpy"]  # numpy finishes the tank clip's frames
 
 [project.scripts]
 rigdeck = "rigdeck.cli:main"
@@ -29,7 +29,7 @@ include = ["rigdeck*"]
 
 [tool.setuptools.package-data]
 "rigdeck.gui" = ["icons/*.svg", "icons/LICENSE-lucide.txt", "qml/*.qml", "qml/pages/*.qml",
-                 "qml/RigDeck/*.qml", "qml/RigDeck/qmldir"]
+                 "qml/RigDeck/*.qml", "qml/RigDeck/qmldir", "fonts/*.ttf", "fonts/README.md"]
 "rigdeck.modules.waterforce" = ["qml/*.qml"]
 "rigdeck.modules.bluetooth" = ["qml/*.qml"]
 "rigdeck.modules.gamemon" = ["qml/*.qml"]

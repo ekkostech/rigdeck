@@ -1,0 +1,10 @@
+[Unit]
+Description=RigDeck: send today's Search Console numbers to the cooler screen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/share/rigdeck/venv/bin/rigdeck studio-daily
+TimeoutStartSec=2h
+Nice=10

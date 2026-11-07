@@ -120,3 +120,32 @@ reached or has no room, the earlier clip and the earlier numbers stay.
 `--dry-run` fetches and builds into `studio-daily-preview/` without touching
 the cooler or `projects.json`; `--force` sends even when nothing changed.
 Run it from a systemd user timer to make it daily.
+
+## The tank
+
+With a `tank` section in `~/.config/rigdeck/studio-daily.json`, the once-a-day
+update builds a different clip: one site's numbers, several in turn, each
+surfacing out of a porthole of glowing coolant in the site's colour while the
+site's logo turns above it.
+
+    {"command": ["macdigital-search", "all", "--json"],
+     "tank": {"project": "macdigital.ca",
+              "positions": ["macdigital-search", "positions", "macdigital.ca"],
+              "res": 384, "samples": 72}}
+
+`project` names a project in `projects.json` (its `color`, `logo` and
+`logoTint` dress the scene). `positions` is optional; with it the clip also
+shows how many searches the site appears for, how many on page one and how
+many in the top three. The numbers shown are: times shown on Google, the
+change against the 28 days before, clicks, and those three.
+
+Each number is a 7-second segment rendered by Blender (`rigdeck/gui/tank_scene.py`),
+about five minutes of graphics-card time at the default size. Rendered segments
+are kept in `~/.cache/rigdeck/tank/` and reused while the number, colour and
+logo are unchanged, so a typical day renders only what moved. Segments unused
+for two days are dropped. Labels are added afterwards by `rigdeck/gui/tank.py`,
+over a darker depth in the liquid that keeps them at 4.5:1 against anything
+the liquid does; a changed label never needs a new render.
+
+Blender must be installed (`pacman -S blender`). `--dry-run` works as for the
+Projects clip.

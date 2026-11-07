@@ -58,7 +58,8 @@ def home(tmp_path, monkeypatch):
 def numbers(home, sites, code=0):
     script = home/'numbers.py'
     script.write_text(f'import json,sys\nprint(json.dumps({{"sites": {sites!r}}}))\nsys.exit({code})\n')
-    (home/'studio-daily.json').write_text(json.dumps({'command': [sys.executable, str(script)]}))
+    config = json.loads((home/'studio-daily.json').read_text()) if (home/'studio-daily.json').exists() else {}
+    (home/'studio-daily.json').write_text(json.dumps({**config, 'command': [sys.executable, str(script)]}))
 
 
 def run(home, cooler, **kw):
@@ -136,7 +137,7 @@ def test_failed_fetch_changes_nothing_after_the_first_send(home):
     assert code == 1 and cooler.log == before and (home/'projects.json').read_text() == files
     assert 'The numbers command failed' in said
     (home/'studio-daily.json').write_text('{}')
-    assert 'Set "command"' in run(home, cooler)[1]
+    assert 'Set the numbers command' in run(home, cooler)[1]
 
 
 def test_dry_run_builds_a_device_ready_clip_and_touches_nothing(home):

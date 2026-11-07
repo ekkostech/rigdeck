@@ -1,0 +1,10 @@
+[Unit]
+Description=RigDeck: once a day, fresh Search Console numbers on the cooler screen
+
+[Timer]
+OnCalendar=*-*-* 05:20:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

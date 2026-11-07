@@ -11,6 +11,11 @@ more often than the numbers change, and skips the send when nothing changed.
 Numbers come from the command in ~/.config/rigdeck/studio-daily.json, for example
 {"command": ["macdigital-search", "all", "--json"]}. It must print
 {"sites": [<28-day Search Console summary>, ...]} as JSON.
+
+With a "tank" section the clip is the tank design (tank.py) for one project, several of its
+numbers in turn: {"tank": {"project": "macdigital.ca",
+"positions": ["macdigital-search", "positions", "macdigital.ca"], "res": 384, "samples": 72}}.
+Without it, the clip is the Projects design for every project.
 """
 from __future__ import annotations
 
@@ -46,24 +51,40 @@ def save_json(path: Path, data):
     temp.replace(path)
 
 
-def fetch(command, timeout=120) -> dict:
-    """Run the numbers command; return {siteUrl: summary} for the sites it could read."""
+def run_command(command, timeout=120, what='numbers') -> str:
+    """Run a configured command and return what it printed, or say plainly why it could not."""
     if not isinstance(command, list) or not command or not all(isinstance(c, str) for c in command):
-        raise ValueError('Set "command" in studio-daily.json to the program that prints the numbers, as a list.')
+        raise ValueError(f'Set the {what} command in studio-daily.json as a list, like ["macdigital-search", "all", "--json"].')
     try:
         r = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
-        raise ValueError(f'The numbers command was not found: {command[0]}')
+        raise ValueError(f'The {what} command was not found: {command[0]}')
     except subprocess.TimeoutExpired:
-        raise ValueError(f'The numbers command took longer than {timeout} seconds.')
+        raise ValueError(f'The {what} command took longer than {timeout} seconds.')
     if r.returncode:
-        raise ValueError('The numbers command failed: ' + (r.stderr.strip() or f'exit {r.returncode}')[-300:])
+        raise ValueError(f'The {what} command failed: ' + (r.stderr.strip() or f'exit {r.returncode}')[-300:])
+    return r.stdout
+
+
+def fetch(command, timeout=120) -> dict:
+    """Run the numbers command; return {siteUrl: summary} for the sites it could read."""
+    out = run_command(command, timeout)
     try:
-        sites = json.loads(r.stdout)['sites']
+        sites = json.loads(out)['sites']
         if not isinstance(sites, list): raise TypeError
     except (ValueError, KeyError, TypeError):
         raise ValueError('The numbers command did not print {"sites": [...]} as JSON.')
     return {s['siteUrl']: s for s in sites if isinstance(s, dict) and isinstance(s.get('siteUrl'), str)}
+
+
+def fetch_positions(command, timeout=120) -> dict:
+    """Run the positions command; return its JSON object (searches and bands)."""
+    try:
+        data = json.loads(run_command(command, timeout, 'positions'))
+        if not isinstance(data, dict) or not isinstance(data.get('bands'), list): raise TypeError
+    except (ValueError, TypeError):
+        raise ValueError('The positions command did not print {"searches": N, "bands": [...]} as JSON.')
+    return data
 
 
 def refresh(projects, summaries):
@@ -149,7 +170,37 @@ def run(dry_run=False, force=False, out=None, today=None, open_cooler=None, say=
     for name, why in kept:
         say(f'Kept earlier numbers for {name}: {why}')
 
-    mark = fingerprint(projects, values)
+    tank_cfg = config.get('tank') if isinstance(config.get('tank'), dict) else None
+    if tank_cfg:
+        # One site, several of its numbers, in the tank: see tank.py.
+        from . import tank
+        wanted = str(tank_cfg.get('project', ''))
+        project = next((p for p in projects if wanted in (p.get('site'), p.get('name'))), None)
+        if not project or not project.get('snapshot'):
+            say(f'No project with numbers called {wanted!r} in projects.json; set "tank": {{"project": ...}} to one of them.'); return 1
+        summary = project['snapshot']
+        positions = None
+        try:
+            positions = fetch_positions(tank_cfg.get('positions'), int(config.get('timeout', 120)))
+            if str(positions.get('range', {}).get('endDate', summary['range']['endDate'])) != summary['range']['endDate']:
+                raise ValueError('their period does not match the summary')
+        except ValueError as e:
+            earlier = state.get('positions')
+            if isinstance(earlier, dict) and earlier.get('range', {}).get('endDate') == summary['range']['endDate']:
+                positions = earlier; say(f'Using the position numbers fetched earlier for this period: {e}')
+            else:
+                say(f'Leaving out the position numbers: {e}')
+        res, samples = int(tank_cfg.get('res', 384)), int(tank_cfg.get('samples', 72))
+        segs = tank.segments(summary, positions)
+        mark = hashlib.sha256(json.dumps(['tank', tank.DESIGN, segs, project.get('color'), tank.file_mark(project.get('logo', '')), project.get('logoTint', ''), res, samples], sort_keys=True).encode()).hexdigest()
+        def make(temp):
+            return tank.build(summary, positions, project, Path(temp), res, samples, say=say)
+        say('Numbers for the tank: ' + ', '.join(f'{s["prefix"]}{s["value"]:,} {s["label"]}' for s in segs))
+    else:
+        mark = fingerprint(projects, values)
+        def make(temp):
+            return build(projects, values, Path(temp))
+        positions = None
     if mark == state.get('fingerprint') and not force and not dry_run:
         say('Nothing changed since the clip on the cooler was sent, so nothing was sent.')
         return 0 if updated else 1
@@ -159,12 +210,12 @@ def run(dry_run=False, force=False, out=None, today=None, open_cooler=None, say=
     name = f'{PREFIX}{day}-{datetime.now():%H%M%S}.mkv' if force else f'{PREFIX}{day}-{mark[:6]}.mkv'
     with tempfile.TemporaryDirectory(prefix='rigdeck-daily-') as temp:
         try:
-            clip = build(projects, values, Path(temp))
+            clip = make(temp)
         except (ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
             say(f'Could not build the clip: {e}'); return 1
         if dry_run:
             folder = Path(out or base/'studio-daily-preview'); folder.mkdir(parents=True, exist_ok=True)
-            for src, dst in [(clip, 'clip.mkv'), (Path(temp)/'preview.gif', 'preview.gif'), (Path(temp)/'poster.png', 'poster.png')]:
+            for src, dst in [(clip, 'clip.mkv'), (Path(clip).parent/'preview.gif', 'preview.gif'), (Path(clip).parent/'poster.png', 'poster.png')]:
                 shutil.copyfile(src, folder/dst)
             say(f'Dry run: built {folder}/clip.mkv. Nothing was sent to the cooler and nothing was saved.')
             return 0
@@ -178,7 +229,7 @@ def run(dry_run=False, force=False, out=None, today=None, open_cooler=None, say=
         save_json(base/'projects.json', projects)
     save_json(base/'studio-daily-state.json', {'fingerprint': mark, 'clip': name,
               'sentAt': datetime.now().astimezone().isoformat(timespec='seconds'),
-              'updated': updated, 'kept': [k[0] for k in kept]})
+              'updated': updated, 'kept': [k[0] for k in kept], **({'positions': positions} if positions else {})})
     say(f'Sent {name}; it is now the only clip playing.' + (f' Removed {", ".join(removed)}.' if removed else '') +
         f' Free space on the cooler: {free_kb / 1024:.1f} MB.')
     return 0 if updated else 1
