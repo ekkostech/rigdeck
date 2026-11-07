@@ -11,7 +11,8 @@ PageScroll {
     readonly property var cool: typeof cooler !== "undefined" ? cooler : null
     readonly property bool uploading: cool !== null && cool.busy !== ""
     property int liveTick: 0
-    readonly property bool portfolioMode: page.d.preset === "Projects" || page.d.preset === "Live projects"
+    readonly property bool portfolioMode: page.d.preset === "Projects" || page.d.preset === "Live projects" || page.d.preset === "Tank"
+    readonly property bool tankMode: page.d.preset === "Tank"
     readonly property bool liveMode: page.d.preset === "Live projects"
     // A built snapshot replaces the live canvas so the clip itself is what gets reviewed.
     readonly property bool showLive: page.liveMode && !screenStudio.ready
@@ -74,7 +75,7 @@ PageScroll {
             }
             Label {
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
-                text: screenStudio.busy ? "Rendering your design…"
+                text: screenStudio.busy ? (screenStudio.note !== "" ? screenStudio.note : "Rendering your design…")
                       : screenStudio.ready ? (page.liveMode ? "Snapshot ready. These numbers stay on the cooler until you send a new one." : "Preview ready · review before sending")
                       : page.liveMode ? screenStudio.liveStatus
                       : screenStudio.preview ? "Design changed · rebuild the preview" : "Your current cooler screen stays unchanged"
@@ -103,7 +104,7 @@ PageScroll {
                 enabled: !screenStudio.busy && !page.uploading
                 Label { text: "Design"; color: theme.muted }
                 ComboBox {
-                    objectName: "presetPicker"; Layout.fillWidth: true; model: ["Signature", "Traffic", "Projects", "Live projects"]
+                    objectName: "presetPicker"; Layout.fillWidth: true; model: ["Signature", "Traffic", "Projects", "Live projects", "Tank"]
                     currentIndex: model.indexOf(page.d.preset)
                     Accessible.name: "Design preset"
                     onActivated: screenStudio.edit("preset", currentText)
@@ -160,10 +161,12 @@ PageScroll {
             }
             Panel {
                 Layout.fillWidth: true; visible: page.d.preset !== "Signature"
-                title: page.d.preset === "Traffic" ? "MacDigital · search pulse" : "Your project rotation"
-                subtitle: page.liveMode ? "See when traffic arrived and how it was served." : "Real numbers. A cinematic presentation."
-                Label { Layout.fillWidth: true; text: page.liveMode ? screenStudio.liveStatus : page.d.preset === "Projects" ? screenStudio.projects.map(p => p.name).join(" · ") : screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
-                Label { Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute while this page is open. Requests include bots and assets, not unique visitors." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                title: page.tankMode ? "The tank" : page.d.preset === "Traffic" ? "MacDigital · search pulse" : "Your project rotation"
+                subtitle: page.tankMode ? "One site's Google numbers, surfacing one by one." : page.liveMode ? "See when traffic arrived and how it was served." : "Real numbers. A cinematic presentation."
+                Label { Layout.fillWidth: true; visible: !page.tankMode; text: page.liveMode ? screenStudio.liveStatus : page.d.preset === "Projects" ? screenStudio.projects.map(p => p.name).join(" · ") : screenStudio.trafficInfo; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 13 }
+                Label { visible: page.tankMode; Layout.fillWidth: true; text: "Times shown on Google, the change against the 28 days before, clicks, and how many searches the site appears for, on page one and in the top three. Each number surfaces from a porthole of glowing coolant in the site's colour while its logo turns above."; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { visible: page.tankMode; Layout.fillWidth: true; text: "Rendered with Blender from the numbers last fetched by the daily update. A number that has not changed is reused; a new one takes about five minutes. Once a day the update sends a fresh clip on its own."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
+                Label { visible: !page.tankMode; Layout.fillWidth: true; text: page.liveMode ? "Cloudflare request analytics refresh every minute while this page is open. Requests include bots and assets, not unique visitors." : "Rotates search clicks, impressions and CTR with a daily impressions chart. Search Console measures Google search, not all visitors. Import a fresh 28-day snapshot to update it."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
                 Label { visible: page.liveMode; Layout.fillWidth: true; text: "The waterline is the last 15 minutes, oldest on the left. A taller wave means more requests that minute, on one shared scale across your sites. Droplets are requests, up to 24 a minute, and the count climbs to the real total. Calm water means no requests. An empty glass means no data."; color: theme.text; wrapMode: Text.WordWrap; font.pixelSize: 12 }
                 Label { visible: page.liveMode; Layout.fillWidth: true; text: "The cooler plays saved clips, so Send to cooler stores a snapshot marked with its time. Those numbers stay until you send a new one."; color: theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 12 }
                 Button { visible: !page.portfolioMode; text: "Import analytics snapshot"; enabled: !screenStudio.busy; onClicked: statsFile.open() }

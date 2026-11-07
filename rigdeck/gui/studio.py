@@ -36,7 +36,7 @@ def validate(values):
         d[key] = int(d[key])
         if not low <= d[key] <= high:
             raise ValueError(f'{key} must be between {low} and {high}.')
-    if d['effect'] not in ('Orbit', 'Pulse', 'Still') or d['preset'] not in ('Signature', 'Traffic', 'Projects', 'Live projects'):
+    if d['effect'] not in ('Orbit', 'Pulse', 'Still') or d['preset'] not in ('Signature', 'Traffic', 'Projects', 'Live projects', 'Tank'):
         raise ValueError('Unknown design preset or animation.')
     for key in ('media', 'logo'):
         if d[key] and not Path(d[key]).is_file():
@@ -195,7 +195,7 @@ class ScreenStudio(QObject):
     changed = Signal()
     def __init__(self):
         super().__init__()
-        self._draft = DEFAULT.copy(); self._busy=False; self._error=''; self._output=''; self._preview=''; self._poster=''
+        self._draft = DEFAULT.copy(); self._busy=False; self._error=''; self._output=''; self._preview=''; self._poster=''; self._note=''
         self._temp = tempfile.TemporaryDirectory(prefix='rigdeck-studio-')
         try: self._draft = validate(json.loads((ROOT/'studio-draft.json').read_text()))
         except (OSError, ValueError, TypeError): pass
@@ -241,6 +241,7 @@ class ScreenStudio(QObject):
 
     draft = Property('QVariantMap', lambda s:s._draft, notify=changed)
     busy = Property(bool, lambda s:s._busy, notify=changed)
+    note = Property(str, lambda s:s._note, notify=changed)  # what a long build is doing right now
     error = Property(str, lambda s:s._error, notify=changed)
     ready = Property(bool, lambda s:bool(s._output), notify=changed)
     preview = Property(str, lambda s:s._preview, notify=changed)
@@ -276,16 +277,21 @@ class ScreenStudio(QObject):
         try: d=validate(self._draft)
         except (ValueError, TypeError) as e:
             self._error=str(e); self.changed.emit(); return
-        self._busy=True; self._error=''; self._output=''; self.changed.emit()
+        self._busy=True; self._error=''; self._output=''; self._note=''; self.changed.emit()
         folder=Path(self._temp.name)/uuid.uuid4().hex
         def done(path):
             self._output=path; self._preview=QUrl.fromLocalFile(str(folder/'preview.gif')).toString()
             self._poster=QUrl.fromLocalFile(str(folder/'poster.png')).toString()
-            self._busy=False; self.changed.emit()
+            self._busy=False; self._note=''; self.changed.emit()
         def failed(e):
-            self._busy=False; self._error=str(e); self.changed.emit()
+            self._busy=False; self._note=''; self._error=str(e); self.changed.emit()
+        def note(text):
+            from .bridge import on_main
+            def show(): self._note=text; self.changed.emit()
+            on_main(show)
         jobs={'Projects':lambda:render_projects(d,folder,self._projects),
-              'Live projects':lambda:render_live(d,folder,self._projects,self._live_data)}
+              'Live projects':lambda:render_live(d,folder,self._projects,self._live_data),
+              'Tank':lambda:render_tank(folder,self._projects,note)}
         run_async(jobs.get(d['preset'],lambda:render(d,folder,self._stats)),done,failed)
     @Slot()
     def clearPreview(self):
@@ -341,3 +347,30 @@ def render_live(values, folder, projects, report):
     # The result of the first site's replay, not the calm water it starts from.
     frame(projects[0],records[0],values['duration']*.85).save(str(folder/'poster.png'))
     return str(output)
+
+
+def render_tank(folder, projects, note=None):
+    """The tank for the project named in studio-daily.json (or the first project): its stored
+    numbers, the position numbers when they can be fetched, rendered segments reused."""
+    from . import daily, tank
+    if not projects: raise ValueError('No projects configured.')
+    config = daily.load_json(ROOT/'studio-daily.json', {})
+    cfg = config.get('tank') if isinstance(config.get('tank'), dict) else {}
+    wanted = str(cfg.get('project', ''))
+    project = next((p for p in projects if wanted and wanted in (p.get('site'), p.get('name'))), None) or \
+              next((p for p in projects if p.get('snapshot')), None)
+    if not project or not project.get('snapshot'):
+        raise ValueError('No project has Search Console numbers yet. Run rigdeck studio-daily, or import a snapshot.')
+    summary = project['snapshot']
+    positions = None
+    if cfg.get('positions'):
+        if note: note('Fetching position numbers…')
+        try:
+            positions = daily.fetch_positions(cfg['positions'], int(config.get('timeout', 120)))
+            if str(positions.get('range', {}).get('endDate', summary['range']['endDate'])) != summary['range']['endDate']: positions = None
+        except ValueError:
+            positions = None
+    if positions is None:
+        earlier = daily.load_json(ROOT/'studio-daily-state.json', {}).get('positions')
+        if isinstance(earlier, dict) and earlier.get('range', {}).get('endDate') == summary['range']['endDate']: positions = earlier
+    return tank.build(summary, positions, project, Path(folder), int(cfg.get('res', 384)), int(cfg.get('samples', 72)), say=note)

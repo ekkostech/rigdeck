@@ -220,3 +220,26 @@ def test_live_page_offers_build_and_send(tmp_path,monkeypatch):
     assert button('Send to cooler').property('enabled')
     assert button('Back to live').property('visible')
 
+
+
+def test_tank_preset_builds_through_the_studio(tmp_path, monkeypatch):
+    """The Tank preset in Screen Studio builds the same clip the daily job sends, from the project's stored numbers."""
+    from types import SimpleNamespace
+    from rigdeck.gui import tank
+    monkeypatch.setattr(studio, 'ROOT', tmp_path)
+    (tmp_path/'studio-daily.json').write_text(json.dumps({'tank': {'project': 'two.example'}}))
+    snapshot={'siteUrl':'sc-domain:two.example','range':{'startDate':'2026-10-07','endDate':'2026-11-03','days':28},'current':{'clicks':2,'impressions':20,'ctr':10},'dailyRows':[]}
+    projects=[{'site':'one.example','name':'One','snapshot':{**snapshot,'siteUrl':'sc-domain:one.example'}},{'site':'two.example','name':'Two','color':'#16b8ff','logo':'/x/logo.png','snapshot':snapshot}]
+    built={}
+    def fake_build(summary, positions, project, folder, res, samples, say=None):
+        built.update(project=project['name'], summary=summary, res=res, positions=positions); say('Rendering 20 times shown on Google…')
+        folder.mkdir(parents=True, exist_ok=True); (folder/'preview.gif').write_bytes(b'g'); (folder/'poster.png').write_bytes(b'p'); (folder/'tank.mkv').write_bytes(b'v')
+        return str(folder/'tank.mkv')
+    monkeypatch.setattr(tank, 'build', fake_build)
+    assert studio.validate({**studio.DEFAULT, 'preset': 'Tank'})['preset'] == 'Tank'
+    notes=[]
+    out=studio.render_tank(tmp_path/'out', projects, notes.append)
+    assert out.endswith('tank.mkv') and built['project']=='Two' and built['res']==384 and built['positions'] is None
+    assert notes==['Rendering 20 times shown on Google…']
+    with pytest.raises(ValueError, match='No project has Search Console numbers'):
+        studio.render_tank(tmp_path/'out2', [{'site':'bare.example'}], None)

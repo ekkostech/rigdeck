@@ -148,4 +148,5 @@ over a darker depth in the liquid that keeps them at 4.5:1 against anything
 the liquid does; a changed label never needs a new render.
 
 Blender must be installed (`pacman -S blender`). `--dry-run` works as for the
-Projects clip.
+Projects clip. In the app, the **Tank** preset in Screen Studio builds the same
+clip on request and sends it with Send to cooler.

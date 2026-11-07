@@ -7,6 +7,10 @@ becomes the GitHub release notes, which RigDeck shows in its update dialog.
 
 ## Unreleased
 
+## 0.8.3+ice.8 — 2026-11-07
+
+- Screen Studio has a Tank preset: Build preview makes the tank clip from the numbers the daily update last fetched, shows what it is rendering, and Send to cooler stores it.
+
 ## 0.8.3+ice.7 — 2026-11-06
 
 - The tank: a 3D clip for the cooler screen, rendered with Blender, in which one site's Google Search numbers surface one by one from a porthole of glowing coolant while its logo turns above. `rigdeck studio-daily` builds it when `studio-daily.json` has a `tank` section, renders only numbers that changed, and keeps small labels at 4.5:1 contrast over the moving liquid.
